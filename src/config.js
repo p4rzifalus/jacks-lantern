@@ -146,11 +146,26 @@ export const HERO_REACH = 0.55;
 //   lanternShadows — сколько фонарей отбрасывают тени (тени от фонарей дорогие)
 //   lanternLights  — сколько фонарей по-настоящему светят (остальные — только светящееся стекло)
 //   textureSize    — предел размера картинок-текстур (на телефоне меньше — меньше памяти)
+//   fogLayers, fogWisps — сколько слоёв тумана под островом и клочьев тумана у краёв
 export const QUALITY = {
-  low:    { tiltShift: false, msaa: 0, maxDpr: 1, shadowMap: 1024, ao: false, godRays: false, particles: 0.4, lanternShadows: 0, lanternLights: 3, textureSize: 512 },
-  medium: { tiltShift: true, msaa: 2, maxDpr: 1.25, shadowMap: 1024, ao: false, godRays: true, particles: 0.7, lanternShadows: 0, lanternLights: 5, textureSize: 1024 },
-  high:   { tiltShift: true, msaa: 2, maxDpr: 1.5, shadowMap: 2048, ao: true, godRays: true, particles: 1, lanternShadows: 1, lanternLights: 7, textureSize: 1024 },
-  ultra:  { tiltShift: true, msaa: 4, maxDpr: 2, shadowMap: 4096, ao: true, godRays: true, particles: 1.5, lanternShadows: 3, lanternLights: 7, textureSize: 1024 },
+  low:    { tiltShift: false, msaa: 0, maxDpr: 1, shadowMap: 1024, ao: false, godRays: false, particles: 0.4, lanternShadows: 0, lanternLights: 3, textureSize: 512, fogLayers: 2, fogWisps: 4 },
+  medium: { tiltShift: true, msaa: 2, maxDpr: 1.25, shadowMap: 1024, ao: false, godRays: true, particles: 0.7, lanternShadows: 0, lanternLights: 5, textureSize: 1024, fogLayers: 3, fogWisps: 6 },
+  high:   { tiltShift: true, msaa: 2, maxDpr: 1.5, shadowMap: 2048, ao: true, godRays: true, particles: 1, lanternShadows: 1, lanternLights: 7, textureSize: 1024, fogLayers: 3, fogWisps: 8 },
+  ultra:  { tiltShift: true, msaa: 4, maxDpr: 2, shadowMap: 4096, ao: true, godRays: true, particles: 1.5, lanternShadows: 3, lanternLights: 7, textureSize: 1024, fogLayers: 4, fogWisps: 10 },
+};
+
+// Туман под островом и вокруг (остров парит над ним). Цвет туман берёт у неба — у горизонта.
+// Слоёв и клочьев — по уровню качества (QUALITY → fogLayers, fogWisps).
+export const FOG_SEA = {
+  cloudiness: 0.47,  // 0 — лёгкая прозрачная дымка, 1 — плотное море облаков с разрывами
+  density: 0.1,     // сколько тумана: 0 — почти нет, 1 — сплошной
+  top: -5.3,        // на какой глубине под землёй верхний слой
+  spacing: 1.9,     // расстояние между слоями (чем больше — тем сильнее «глубина» при повороте)
+  size: 12.5,          // размер облаков (в клетках)
+  speed: 0.14,      // как быстро плывёт
+  brightness: 0.2,  // светлота верхушек облаков
+  warmGlow: 0.4,    // тёплый отсвет фонарей на тумане под островом
+  wispOpacity: 0.5, // клочья тумана у краёв острова: прозрачность
 };
 
 // Вечерний свет

@@ -16,7 +16,7 @@ export function loadFxSettings(quality) {
   return settings;
 }
 
-export function createDevPanel(settings, pipeline, quality, weather, audio, getHero) {
+export function createDevPanel(settings, pipeline, quality, weather, audio, getHero, fogSea) {
   const save = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -66,6 +66,29 @@ export function createDevPanel(settings, pipeline, quality, weather, audio, getH
     gui.add(who, 'skin', Object.fromEntries(Object.entries(names).filter(([, s]) => HERO_SKINS.includes(s))))
       .name('герой').onChange((skin) => getHero().setSkin(skin));
     queueMicrotask(() => { who.skin = getHero().skin; gui.controllersRecursive().forEach((c) => c.updateDisplay()); });
+  }
+
+  if (fogSea) {
+    // Туман не запоминается: подобрал — «скопировать туман» и впиши в config.js → FOG_SEA
+    const fog = gui.addFolder('Туман');
+    const f = fogSea.settings;
+    const apply = () => fogSea.apply();
+    fog.add(f, 'cloudiness', 0, 1, 0.01).name('дымка ↔ облака').onChange(apply);
+    fog.add(f, 'density', 0, 1, 0.01).name('густота').onChange(apply);
+    fog.add(f, 'top', -8, -1.5, 0.1).name('глубина').onChange(apply);
+    fog.add(f, 'spacing', 0.5, 5, 0.1).name('между слоями').onChange(apply);
+    fog.add(f, 'size', 3, 20, 0.5).name('размер облаков').onChange(apply);
+    fog.add(f, 'speed', 0, 0.6, 0.01).name('скорость').onChange(apply);
+    fog.add(f, 'brightness', 0, 1.5, 0.05).name('светлота').onChange(apply);
+    fog.add(f, 'warmGlow', 0, 1, 0.05).name('отсвет фонарей').onChange(apply);
+    fog.add(f, 'wispOpacity', 0, 1, 0.05).name('клочья у краёв').onChange(apply);
+    fog.add({
+      copy() {
+        const text = JSON.stringify(f, null, 2);
+        navigator.clipboard?.writeText(text);
+        console.log(text);
+      },
+    }, 'copy').name('скопировать туман');
   }
 
   if (weather) {

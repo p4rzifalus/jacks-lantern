@@ -17,6 +17,7 @@ import { createLighting } from './render/lighting.js';
 import { createWeather } from './render/weather.js';
 import { createEffects } from './world/effects.js';
 import { createLanterns } from './world/lanterns.js';
+import { createFogSea } from './world/fog-sea.js';
 import { applySkyReflex } from './render/sky-reflex.js';
 import { createDevPanel, loadFxSettings } from './render/devpanel.js';
 import { loadGame, saveGame, clearSave } from './save.js';
@@ -29,11 +30,12 @@ const lighting = createLighting(renderer, scene, quality, landmarks.island); // 
 const lanterns = createLanterns(scene, quality);
 const effects = createEffects(scene, quality, lanterns.positions);
 const weather = createWeather(scene, quality, lighting, landmarks.island);
+const fogSea = createFogSea(scene, quality, landmarks.island); // туман под островом и вокруг
 const fx = loadFxSettings(quality);
 const pipeline = createPipeline(renderer, scene, camera, fx, quality);
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
-const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero) : null;
+const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea) : null;
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
@@ -231,6 +233,7 @@ renderer.setAnimationLoop((now) => {
   decor.fireflyVisibility = 1 - weather.wetness; // в дождь светлячки прячутся
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness });
   island.update(now / 1000);
+  fogSea.update(dt);
   sound.update(dt, {
     heroPosition: hero.position,
     onSoil: isInGarden(worldToCell(hero.position)),
@@ -249,7 +252,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,
