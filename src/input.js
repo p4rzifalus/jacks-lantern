@@ -20,6 +20,7 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
   const worldUp = new THREE.Vector3(0, 1, 0);
 
   window.addEventListener('keydown', (e) => {
+    if (!input.enabled) return; // открыто меню
     if (MOVE_KEYS[e.code]) {
       pressed.add(MOVE_KEYS[e.code]);
       e.preventDefault();
@@ -54,6 +55,7 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
 
   const input = {
     hoverCell: null,
+    enabled: true, // false — управление выключено (открыто меню)
 
     // Направление ходьбы с клавиатуры (нулевой вектор, если ничего не нажато)
     getMoveDir() {
@@ -61,6 +63,7 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
       screenUp.setY(0).normalize();
       screenRight.crossVectors(screenUp, worldUp);
       const dir = new THREE.Vector3();
+      if (!input.enabled) return dir;
       if (pressed.has('up')) dir.add(screenUp);
       if (pressed.has('down')) dir.sub(screenUp);
       if (pressed.has('right')) dir.add(screenRight);

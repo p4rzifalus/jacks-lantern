@@ -6,9 +6,10 @@ import { SOUND } from '../config.js';
 const STORAGE_KEY = 'ogorod2-sound';
 const BUSES = ['effects', 'ambience', 'music'];
 
-// Что включено: «звуки» (действия + фон) и «музыка». Запоминается в браузере.
+// Что включено: «звуки» (действия + фон) и «музыка», и громкость каждого из меню (0…1).
+// Запоминается в браузере.
 function loadSwitches() {
-  const on = { effects: true, music: true };
+  const on = { effects: true, music: true, effectsLevel: 1, musicLevel: 1 };
   try {
     Object.assign(on, JSON.parse(localStorage.getItem(STORAGE_KEY)));
   } catch { /* нет сохранённого — всё включено */ }
@@ -57,12 +58,14 @@ export function createAudioEngine() {
     isOn: (name) => switches[name],
     toggle(name, on = !switches[name]) {
       switches[name] = on;
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(switches));
-      } catch { /* не страшно */ }
-      start(); // нажатие на кнопку — тоже «первое касание»
-      engine.applyVolumes();
-      changeCallbacks.forEach((cb) => cb());
+      changed();
+    },
+    // Громкость из меню: name — 'effects' или 'music', value — 0…1
+    level: (name) => switches[`${name}Level`],
+    setLevel(name, value) {
+      switches[`${name}Level`] = value;
+      if (value > 0) switches[name] = true; // подвинул ползунок — значит, хочет слышать
+      changed();
     },
     onChange: (cb) => changeCallbacks.push(cb),
 
@@ -78,15 +81,24 @@ export function createAudioEngine() {
       if (!ctx) return;
       const target = {
         master: volumes.master,
-        effects: switches.effects ? volumes.effects : 0,
-        ambience: switches.effects ? volumes.ambience : 0,
-        music: switches.music ? volumes.music : 0,
+        effects: switches.effects ? volumes.effects * switches.effectsLevel : 0,
+        ambience: switches.effects ? volumes.ambience * switches.effectsLevel : 0,
+        music: switches.music ? volumes.music * switches.musicLevel : 0,
       };
       for (const [name, value] of Object.entries(target)) {
         engine.gains[name].gain.setTargetAtTime(value, ctx.currentTime, 0.12);
       }
     },
   };
+
+  function changed() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(switches));
+    } catch { /* не страшно */ }
+    start(); // нажатие на кнопку — тоже «первое касание»
+    engine.applyVolumes();
+    changeCallbacks.forEach((cb) => cb());
+  }
 
   function start() {
     if (engine.ctx) {

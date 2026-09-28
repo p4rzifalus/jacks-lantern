@@ -1,6 +1,13 @@
 // Сохранение игры в браузере (localStorage). Без сервера.
+// Тот же набор данных пишется и в файл (см. save-file.js), поэтому формат — в одном месте.
 const KEY = 'ogorod2-save'; // своё имя: у первой версии на том же сайте — своё сохранение
 const VERSION = 2; // меняется, когда меняется формат сохранения
+const GAME = 'osennyaya-ferma-2'; // метка в файле, чтобы не спутать с чужим
+
+// Полное сохранение: метка игры, версия формата, время сохранения и само состояние
+export function packSave(state) {
+  return { game: GAME, version: VERSION, savedAt: Date.now(), ...state };
+}
 
 export function loadGame() {
   try {
@@ -23,9 +30,26 @@ function upgrade(data) {
   return data.version === VERSION ? data : null;
 }
 
-export function saveGame(state) {
+// Текст из файла → сохранение, или null, если это не наш файл
+export function readSave(text) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ version: VERSION, savedAt: Date.now(), ...state }));
+    const data = JSON.parse(text);
+    if (!data || typeof data !== 'object' || (data.game && data.game !== GAME)) return null;
+    const upgraded = upgrade(data);
+    return upgraded && Array.isArray(upgraded.cells) ? upgraded : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveGame(state) {
+  storeSave(packSave(state));
+}
+
+// Записать готовое сохранение (например, из файла) — игра подхватит его при следующем запуске
+export function storeSave(data) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(data));
   } catch { /* браузер не даёт сохранять — играем без сохранения */ }
 }
 

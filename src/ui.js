@@ -1,4 +1,4 @@
-// Интерфейс поверх сцены: панель инструментов, выбор семян, монеты, магазин, подсказки.
+// Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, подсказки.
 
 // Пиксельные значки 12×12: «#» — закрашенный пиксель, «.» — пусто
 const PIXEL_ICONS = {
@@ -58,34 +58,19 @@ const PIXEL_ICONS = {
     '############',
     '............',
   ],
-  // звук: динамик с волнами
-  sound: [
+  // меню: три полоски
+  menu: [
     '............',
-    '.....#......',
-    '....##...#..',
-    '...###.#..#.',
-    '######..#.#.',
-    '######..#.#.',
-    '######..#.#.',
-    '######..#.#.',
-    '...###.#..#.',
-    '....##...#..',
-    '.....#......',
     '............',
-  ],
-  // музыка: две ноты
-  music: [
+    '.##########.',
+    '.##########.',
     '............',
-    '....#######.',
-    '....#######.',
-    '....#.....#.',
-    '....#.....#.',
-    '....#.....#.',
-    '....#.....#.',
-    '..###...###.',
-    '.####..####.',
-    '.####..####.',
-    '..##....##..',
+    '.##########.',
+    '.##########.',
+    '............',
+    '.##########.',
+    '.##########.',
+    '............',
     '............',
   ],
   // лупа — крупный план
@@ -160,33 +145,18 @@ function formatTime(seconds) {
   return `${String(Math.round((seconds / 60) * 10) / 10).replace('.', ',')} мин`;
 }
 
-export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCloseUp, onRotate, sound }) {
-  // Кнопки звука и музыки в левом верхнем углу (клавиши N и M). Выключенная — перечёркнута и тусклее.
-  const soundBar = el('div', 'sound-bar');
-  const soundButtons = [
-    ['effects', 'sound', 'N', 'Звуки'],
-    ['music', 'music', 'M', 'Музыка'],
-  ].map(([name, icon, key, label]) => {
-    const b = el('button', '', `${pixelIcon(icon)}<span class="key">${key}</span>`);
-    b.addEventListener('click', () => sound.toggle(name));
-    soundBar.appendChild(b);
-    return { name, b, label };
-  });
-  const showSound = () => {
-    for (const { name, b, label } of soundButtons) {
-      const on = sound.isOn(name);
-      b.classList.toggle('off', !on);
-      b.title = `${label}: ${on ? 'вкл' : 'выкл'}`;
-      b.setAttribute('aria-label', b.title);
-      b.setAttribute('aria-pressed', String(on));
-    }
-  };
-  sound.onChange(showSound);
-  showSound();
-  document.body.appendChild(soundBar);
+export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCloseUp, onRotate, onMenu }) {
+  // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка
+  const menuBar = el('div', 'corner-bar');
+  const menuButton = el('button', '', `${pixelIcon('menu')}<span class="key">Esc</span>`);
+  menuButton.title = 'Меню';
+  menuButton.setAttribute('aria-label', 'Меню');
+  menuButton.addEventListener('click', () => onMenu());
+  menuBar.appendChild(menuButton);
+  document.body.appendChild(menuBar);
 
-  // Кнопки камеры под ними: повернуть мир влево (Q), крупный план (Z), повернуть вправо (E)
-  const viewBar = el('div', 'sound-bar view-bar');
+  // Кнопки камеры под меню: повернуть мир влево (Q), крупный план (Z), повернуть вправо (E)
+  const viewBar = el('div', 'corner-bar view-bar');
   const viewButton = (icon, key, label, onClick) => {
     const b = el('button', '', `${pixelIcon(icon)}<span class="key">${key}</span>`);
     b.title = label;

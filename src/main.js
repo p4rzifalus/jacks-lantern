@@ -20,7 +20,8 @@ import { createLanterns } from './world/lanterns.js';
 import { createFogSea } from './world/fog-sea.js';
 import { applySkyReflex } from './render/sky-reflex.js';
 import { createDevPanel, loadFxSettings } from './render/devpanel.js';
-import { loadGame, saveGame, clearSave } from './save.js';
+import { loadGame, saveGame, clearSave, storeSave, packSave } from './save.js';
+import { createMenu } from './menu.js';
 import { createSound } from './audio/index.js';
 
 const quality = detectQuality();
@@ -39,6 +40,7 @@ const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, wea
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
+let menu = null; // меню и стартовый экран (создаются ниже)
 let effectJustPlayed = false; // подсказка сразу после действия («+2 мон.») — не ошибка, «нельзя» не звучит
 const game = createGame({
   onHint(text, ms) {
@@ -109,14 +111,14 @@ const ui = createUI({
   onShopToggle: toggleShop,
   onCloseUp: toggleCloseUp,
   onRotate: rotateWorld,
-  sound: sound.engine,
+  onMenu: () => menu.toggle(),
 });
 
 // Загрузка сохранения. Растения «досчитываются» сами: стадия считается от момента полива.
 const saved = loadGame();
 if (saved) {
   game.load(saved);
-  const pos = saved.hero || saved.hero; // в старых сохранениях место героя записано как «hero»
+  const pos = saved.hero || saved.mole; // в старых сохранениях место героя записано как «mole»
   if (pos) {
     hero.position.set(pos.x, 0, pos.z);
     hero.heading = hero.targetHeading = pos.heading;
@@ -139,17 +141,49 @@ function refresh() {
 }
 
 // ---------- Сохранение ----------
+// Всё, что сохраняем (в браузер и в файл): огород, монеты, семена, где стоит герой, ракурс камеры
+function snapshot() {
+  return { ...game.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
+    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp } };
+}
+
 function save() {
-  if (restarting) return;
-  saveGame({ ...game.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
-    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp } });
+  // до стартового экрана и пока он открыт ещё не играем — нечего сохранять
+  if (restarting || !menu || menu.isStart) return;
+  saveGame(snapshot());
+}
+
+// Перезапуск страницы сразу в игру, без стартового экрана (после «Новой игры» и загрузки файла)
+const SKIP_INTRO = 'ogorod2-skip-intro';
+function reloadIntoGame() {
+  restarting = true;
+  try {
+    sessionStorage.setItem(SKIP_INTRO, '1');
+  } catch { /* не страшно: просто покажется стартовый экран */ }
+  location.reload();
 }
 
 function restart() {
-  restarting = true;
   clearSave();
-  location.reload();
+  reloadIntoGame();
 }
+
+// ---------- Меню и стартовый экран ----------
+menu = createMenu({
+  engine: sound.engine,
+  hasSave: !!saved,
+  savedAt: saved?.savedAt,
+  snapshot: () => packSave(snapshot()),
+  onNewGame: restart,
+  onLoad(data) {
+    storeSave(data); // игра прочитает его при перезапуске, рост досчитается по часам
+    reloadIntoGame();
+  },
+  onOpenChange(open) {
+    input.enabled = !open; // пока открыто меню, герой стоит
+    if (!open) save();
+  },
+});
 
 // При закрытии/сворачивании вкладки и раз в 5 секунд — на всякий случай
 document.addEventListener('visibilitychange', () => {
@@ -187,8 +221,21 @@ const input = createInput(renderer.domElement, camera, {
   },
 }, [{ object: basket, cell: BASKET_CELL }]);
 
+// Стартовый экран при заходе на сайт (кроме перезапуска после «Новой игры» и загрузки файла)
+let skipIntro = false;
+try {
+  skipIntro = sessionStorage.getItem(SKIP_INTRO) === '1';
+  sessionStorage.removeItem(SKIP_INTRO);
+} catch { /* нет доступа — показываем стартовый экран */ }
+if (!skipIntro) menu.showStart();
+
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && game.state.shopOpen) toggleShop(false);
+  if (e.code === 'Escape') {
+    if (menu.isOpen) menu.close();
+    else if (game.state.shopOpen) toggleShop(false);
+    else menu.open();
+  }
+  if (menu.isOpen) return; // в меню клавиши игры не работают
   if (e.code === 'KeyM') sound.engine.toggle('music');   // M — музыка
   if (e.code === 'KeyN') sound.engine.toggle('effects'); // N — звуки
   if (e.repeat) return;
