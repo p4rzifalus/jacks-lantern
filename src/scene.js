@@ -77,7 +77,7 @@ export function createScene(container) {
   const basket = createBasket(basketPos.x, basketPos.z);
   scene.add(basket);
 
-  // Где крот может ходить и во что упирается
+  // Где герой может ходить и во что упирается
   const world = {
     bounds: { min: -half + 0.25, max: half - 0.25 },
     obstacles: [{ x: basketPos.x, z: basketPos.z, r: 0.45 }],
@@ -190,7 +190,7 @@ export function createScene(container) {
   let lastPan = -Infinity; // когда игрок последний раз двигал сцену пальцем
 
   const cameraControl = {
-    // Сдвинуть сцену вслед за пальцем (в точках экрана). В крупном плане камера держит крота — не двигаем.
+    // Сдвинуть сцену вслед за пальцем (в точках экрана). В крупном плане камера держит героя — не двигаем.
     panBy(dxPx, dyPx) {
       if (closeUp) return;
       view.center.x -= dxPx / view.scale;
@@ -200,7 +200,7 @@ export function createScene(container) {
     },
 
     // Каждый кадр: поворот и приближение; лёгкое покачивание камеры;
-    // в крупном плане — держим крота в центре; на телефоне — мягко догнать крота, если он ушёл к краю
+    // в крупном плане — держим героя в центре; на телефоне — мягко догнать героя, если он ушёл к краю
     update(dt, time, followPos) {
       if (turning) {
         turning.t = Math.min(1, turning.t + (CAMERA.rotateTime > 0 ? dt / CAMERA.rotateTime : 1));
@@ -212,7 +212,7 @@ export function createScene(container) {
         if (turning.t >= 1) turning = null;
       }
 
-      // Крупный план — от вида «вся сцена», поэтому на телефоне (где и так ближе) крот того же размера
+      // Крупный план — от вида «вся сцена», поэтому на телефоне (где и так ближе) герой того же размера
       // во время поворота приближение не пересчитываем — иначе оно тоже «гуляет»
       const zoomTarget = turning ? zoom : closeUp ? Math.max(1.25, (wholeSceneScale() * CAMERA.closeUpZoom) / view.scale) : 1;
       zoom += (zoomTarget - zoom) * Math.min(1, dt * 6);
@@ -220,7 +220,7 @@ export function createScene(container) {
 
       breath.set(Math.sin(time * 0.37) * CAMERA.breath, Math.sin(time * 0.23 + 1) * CAMERA.breath * 0.6);
       if (closeUp && followPos && !turning) {
-        const p = toView(followPos.clone().setY(followPos.y + 0.3)); // центр — на уровне груди крота
+        const p = toView(followPos.clone().setY(followPos.y + 0.3)); // центр — на уровне груди героя
         const k = Math.min(1, dt * 5);
         view.center.x += (p.x - view.center.x) * k;
         view.center.y += (p.y - view.center.y) * k;
@@ -239,7 +239,7 @@ export function createScene(container) {
       applyView();
     },
 
-    // Повернуть мир на 90°: +1 — по часовой стрелке, −1 — против. focusPos — что держать в центре (крот)
+    // Повернуть мир на 90°: +1 — по часовой стрелке, −1 — против. focusPos — что держать в центре (герой)
     rotate(step, focusPos) {
       turn = (turn + step + 4) % 4;
       targetYaw += step * (Math.PI / 2); // камера идёт вокруг острова — мир на экране крутится по часовой
@@ -263,7 +263,7 @@ export function createScene(container) {
     },
     get turn() { return turn; },
 
-    // Крупный план крота: вкл/выкл (или задать явно)
+    // Крупный план героя: вкл/выкл (или задать явно)
     toggleCloseUp(on = !closeUp) {
       closeUp = on;
     },
@@ -445,7 +445,7 @@ export function createHoverFrame() {
   return frame;
 }
 
-// Заливка клетки перед кротом
+// Заливка клетки перед героем
 export function createFrontMarker() {
   const marker = new THREE.Mesh(
     new THREE.PlaneGeometry(CELL_SIZE * 0.86, CELL_SIZE * 0.86),

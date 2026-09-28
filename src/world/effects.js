@@ -34,7 +34,7 @@ export function createEffects(scene, quality, lanternLights) {
   return {
     splashAt,
 
-    // Полив: струя капель из лейки (перед кротом) дугой на грядку, брызги при падении
+    // Полив: струя капель из лейки (перед героем) дугой на грядку, брызги при падении
     water(from, to) {
       for (let i = 0; i < 28; i++) {
         const delay = i * 0.012;

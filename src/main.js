@@ -1,11 +1,11 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
-import { MOLE_START, BASKET_CELL, PLANTS } from './config.js';
+import { HERO_START, BASKET_CELL, PLANTS } from './config.js';
 import { cellToWorld, worldToCell, isInGarden, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
 import { RIPE } from './garden.js';
 import { createScene, createHoverFrame, createFrontMarker } from './scene.js';
-import { Mole } from './mole.js';
+import { Hero } from './hero.js';
 import { GardenView } from './world/garden-view.js';
 import { createInput } from './input.js';
 import { createUI, TOOLS } from './ui.js';
@@ -33,7 +33,7 @@ const fx = loadFxSettings(quality);
 const pipeline = createPipeline(renderer, scene, camera, fx, quality);
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
-const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine) : null;
+const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero) : null;
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
@@ -47,11 +47,11 @@ const game = createGame({
     effectJustPlayed = true;
     queueMicrotask(() => { effectJustPlayed = false; });
     if (name === 'unlocked') return sound.unlocked();
-    sound[name](name === 'sold' ? PLANTS[mole.held]?.sellPrice : undefined); // урожай ещё в лапах — по нему считаем монетки
-    mole.playAction(); // крот наклоняется: сажает, поливает, собирает, кладёт в корзинку
+    sound[name](name === 'sold' ? PLANTS[hero.held]?.sellPrice : undefined); // урожай ещё в лапах — по нему считаем монетки
+    hero.playAction(); // герой наклоняется: сажает, поливает, собирает, кладёт в корзинку
     const at = cellToWorld(cell.x, cell.z);
     if (name === 'planted') effects.dirt(at);
-    if (name === 'watered') effects.water(mole.frontPoint.lerp(mole.position, 0.4), at);
+    if (name === 'watered') effects.water(hero.frontPoint.lerp(hero.position, 0.4), at);
     if (name === 'harvested') effects.sparkle(at);
     if (name === 'sold') effects.coins(at);
   },
@@ -62,10 +62,10 @@ const game = createGame({
 const gardenView = new GardenView(scene, game.garden);
 const decor = createDecor(scene, landmarks);
 
-const mole = new Mole();
-mole.position.copy(cellToWorld(MOLE_START.x, MOLE_START.z));
-mole.heading = mole.targetHeading = Math.PI; // смотрит на огород
-scene.add(mole.object);
+const hero = new Hero();
+hero.position.copy(cellToWorld(HERO_START.x, HERO_START.z));
+hero.heading = hero.targetHeading = Math.PI; // смотрит на огород
+scene.add(hero.object);
 
 const hoverFrame = createHoverFrame();
 const frontMarker = createFrontMarker();
@@ -81,7 +81,7 @@ function toggleShop(open = !game.state.shopOpen) {
   game.toggleShop(open);
 }
 
-// Камера: крупный план крота и поворот мира по 90°
+// Камера: крупный план героя и поворот мира по 90°
 function toggleCloseUp(on) {
   sound.click();
   cameraControl.toggleCloseUp(on);
@@ -89,7 +89,7 @@ function toggleCloseUp(on) {
 }
 function rotateWorld(step) {
   sound.click();
-  cameraControl.rotate(step, mole.position);
+  cameraControl.rotate(step, hero.position);
   refresh();
 }
 
@@ -114,22 +114,23 @@ const ui = createUI({
 const saved = loadGame();
 if (saved) {
   game.load(saved);
-  if (saved.mole) {
-    mole.position.set(saved.mole.x, 0, saved.mole.z);
-    mole.heading = mole.targetHeading = saved.mole.heading;
-    mole.collide(world); // на случай, если огород поменялся
+  const pos = saved.hero || saved.hero; // в старых сохранениях место героя записано как «hero»
+  if (pos) {
+    hero.position.set(pos.x, 0, pos.z);
+    hero.heading = hero.targetHeading = pos.heading;
+    hero.collide(world); // на случай, если огород поменялся
   }
 }
 if (saved?.view) {
-  cameraControl.setTurn(saved.view.turn || 0, mole.position);
+  cameraControl.setTurn(saved.view.turn || 0, hero.position);
   cameraControl.toggleCloseUp(!!saved.view.closeUp);
 }
-cameraControl.centerOn(mole.position); // на телефоне сцена ближе — начинаем с крота
+cameraControl.centerOn(hero.position); // на телефоне сцена ближе — начинаем с героя
 refresh();
 
 // Обновить картинку и интерфейс по состоянию игры и сохранить — после любого изменения
 function refresh() {
-  if (mole.held !== game.state.held) mole.setHeld(game.state.held);
+  if (hero.held !== game.state.held) hero.setHeld(game.state.held);
   basket.userData.fill.visible = game.hasHarvest();
   ui.render({ ...game.view(), closeUp: cameraControl.isCloseUp });
   save();
@@ -138,7 +139,7 @@ function refresh() {
 // ---------- Сохранение ----------
 function save() {
   if (restarting) return;
-  saveGame({ ...game.toSave(), mole: { x: mole.position.x, z: mole.position.z, heading: mole.heading },
+  saveGame({ ...game.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
     view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp } });
 }
 
@@ -156,20 +157,20 @@ window.addEventListener('pagehide', save);
 setInterval(save, 5000);
 
 // ---------- Управление ----------
-// Клетка перед носом крота
+// Клетка перед носом героя
 function frontCell() {
-  const c = worldToCell(mole.frontPoint);
+  const c = worldToCell(hero.frontPoint);
   return isInGarden(c) || isBasket(c) ? c : null;
 }
 
 const input = createInput(renderer.domElement, camera, {
   // Клик по клетке: идём к ней, встаём рядом лицом к ней и действуем
   onCellClick(c) {
-    const path = findPathToNeighbor(worldToCell(mole.position), c);
+    const path = findPathToNeighbor(worldToCell(hero.position), c);
     if (!path) return;
     const points = path.map((p) => cellToWorld(p.x, p.z));
-    if (points.length > 1) points.shift(); // первая точка — клетка, где крот уже стоит
-    mole.walkPath(points, cellToWorld(c.x, c.z), () => game.useTool(c));
+    if (points.length > 1) points.shift(); // первая точка — клетка, где герой уже стоит
+    hero.walkPath(points, cellToWorld(c.x, c.z), () => game.useTool(c));
   },
   onAction() {
     const c = frontCell();
@@ -222,8 +223,8 @@ renderer.setAnimationLoop((now) => {
   const dt = Math.min((now - last) / 1000, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
   last = now;
 
-  mole.update(dt, input.getMoveDir(), world);
-  cameraControl.update(dt, now / 1000, mole.position);
+  hero.update(dt, input.getMoveDir(), world);
+  cameraControl.update(dt, now / 1000, hero.position);
   gardenView.update();
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
@@ -231,8 +232,8 @@ renderer.setAnimationLoop((now) => {
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness });
   island.update(now / 1000);
   sound.update(dt, {
-    molePosition: mole.position,
-    onSoil: isInGarden(worldToCell(mole.position)),
+    heroPosition: hero.position,
+    onSoil: isInGarden(worldToCell(hero.position)),
     windStrength: decor.windStrength,
     rain: weather.intensity,
   });
@@ -248,7 +249,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, mole, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

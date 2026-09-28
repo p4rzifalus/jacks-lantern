@@ -29,7 +29,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     coins: 0,
     seeds: {},      // запас семян: { radish: 3, ... } (морковь бесплатная, её не считаем)
     harvested: {},  // сколько чего отнесено в корзинку: { carrot: 7, ... }
-    held: null,     // что у крота в лапах
+    held: null,     // что у героя в лапах
     shopOpen: false,
   };
 
@@ -149,7 +149,7 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     hasHarvest: () => Object.values(state.harvested).some((n) => n > 0),
 
-    // Для сохранения (позицию крота добавляет main.js)
+    // Для сохранения (позицию героя добавляет main.js)
     toSave() {
       const { coins, seeds, harvested, held, tool, selectedSeed } = state;
       return { cells: garden.toSave(), coins, seeds, harvested, held, tool, selectedSeed };

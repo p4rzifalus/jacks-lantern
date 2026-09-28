@@ -1,14 +1,15 @@
-// Пиксельные спрайты, нарисованные кодом: крот, растения, урожай в лапах, трава и цветы.
+// Пиксельные спрайты, нарисованные кодом: герой (енот и крот), растения, урожай в лапах, трава и цветы.
 // Любой лист можно заменить своим рисунком из Aseprite — порядок кадров описан в ART.md.
 import { COLORS, PLANTS } from '../config.js';
 import { PixelSheet } from './pixels.js';
 
 export const PLANT_ORDER = Object.keys(PLANTS); // строки листа растений
 
-// ---------- Крот ----------
+// ---------- Герой: енот и крот ----------
 // Кадр 32×32, земля — нижняя строка. Колонки: стоит 0–3, идёт 4–9, действует 10–13, несёт 14–19.
 // Строки: 0 — к зрителю, 1 — влево, 2 — вправо (зеркало), 3 — от зрителя.
-export const MOLE = {
+// Все скины рисуются по одной схеме (одежда общая), отличаются окрасом, ушами, мордочкой и хвостом.
+export const HERO = {
   frameW: 32, frameH: 32, cols: 20, rows: 4,
   anims: { idle: [0, 4], walk: [4, 6], act: [10, 4], carry: [14, 6] }, // [первый кадр, сколько кадров]
   dirs: { down: 0, left: 1, right: 2, up: 3 },
@@ -16,93 +17,166 @@ export const MOLE = {
 
 const C = COLORS;
 
+// Окрас скинов. ears / mask / tail — есть ли уши, маска вокруг глаз, полосатый хвост
+const SKINS = {
+  mole: {
+    body: C.moleBody, snout: C.moleSnout, nose: C.moleNose, eyes: C.moleEyes, paws: C.molePaws,
+  },
+  raccoon: {
+    body: C.raccoonBody, snout: C.raccoonLight, nose: C.raccoonNose, eyes: C.raccoonEyes, paws: C.raccoonDark,
+    dark: C.raccoonDark, light: C.raccoonLight, ears: true, mask: true, tail: true,
+  },
+};
+export const HERO_SKINS = Object.keys(SKINS);
+
+// Полосатый хвост: полосы по 2 пикселя, тёмная — через одну, кончик тёмный.
+// Со спины — свисает вниз, в профиль — торчит назад; sway — покачивание (−1…1)
+function tailBack(d, S, b, sway) {
+  for (let y = 20; y <= 29; y++) {
+    const t = (y - 20) / 9;
+    const cx = 16 + Math.round(sway * t * 1.5);
+    const w = y === 20 || y === 29 ? 1 : 2;
+    d.rect(cx - w, y + (y === 29 ? 0 : b), w * 2 + 1, 1, y >= 28 || ((y - 20) >> 1) % 2 ? S.dark : S.body);
+  }
+}
+
+function tailSide(d, S, b, sway) {
+  for (let x = 21; x <= 29; x++) {
+    const t = (x - 21) / 8;
+    const cy = 23 - Math.round(t * t * 3) + Math.round(sway * t) + b;
+    const h = x === 29 ? 1 : 2;
+    d.rect(x, cy - h, 1, h * 2 + 1, x >= 28 || ((x - 21) >> 1) % 2 ? S.dark : S.body);
+  }
+}
+
+// Ушко: тёмное снаружи, светлое внутри (со спины — без светлого)
+function ear(d, S, x, y, back) {
+  d.ellipse(x, y, 1.5, 1.5, S.dark);
+  if (!back) d.px(x, y, S.light);
+}
+
+function hat(d, b, w) {
+  d.ellipse(16, 6 + b, w === 9 ? 9 : 8, 1.5, C.hat);
+  d.rect(12, 1 + b, w, 5, C.hat);
+  d.rect(12, 4 + b, w, 1, C.hatBand);
+}
+
 // pose: bob — присесть (0–2), liftL/liftR — поднять ногу, footL/footR — шаг вбок (для профиля),
-// arms — 'down' | 'forward' | 'carry', swingL/swingR — взмах рук
-function drawMoleFront(d, pose, back) {
+// arms — 'down' | 'forward' | 'carry', swingL/swingR — взмах рук, tail — покачивание хвоста
+function drawHeroFront(d, pose, back, S) {
   const b = pose.bob;
   // ноги и лапки
-  d.rect(12, 26 + b, 3, 4 - b - pose.liftL, C.moleBody);
-  d.rect(17, 26 + b, 3, 4 - b - pose.liftR, C.moleBody);
-  d.ellipse(13, 30 - pose.liftL, 2, 1, C.molePaws);
-  d.ellipse(19, 30 - pose.liftR, 2, 1, C.molePaws);
+  d.rect(12, 26 + b, 3, 4 - b - pose.liftL, S.body);
+  d.rect(17, 26 + b, 3, 4 - b - pose.liftR, S.body);
+  d.ellipse(13, 30 - pose.liftL, 2, 1, S.paws);
+  d.ellipse(19, 30 - pose.liftR, 2, 1, S.paws);
   // грудка и комбинезон
-  d.ellipse(16, 17 + b, 5, 3, C.moleBody);
-  d.ellipse(16, 22 + b, 6, 5, C.moleOveralls);
+  d.ellipse(16, 17 + b, 5, 3, S.body);
+  d.ellipse(16, 22 + b, 6, 5, C.overalls);
   if (back) {
-    d.line(12, 16 + b, 19, 20 + b, C.moleOveralls); // лямки крест-накрест
-    d.line(20, 16 + b, 13, 20 + b, C.moleOveralls);
+    d.line(12, 16 + b, 19, 20 + b, C.overalls); // лямки крест-накрест
+    d.line(20, 16 + b, 13, 20 + b, C.overalls);
   } else {
-    d.line(13, 16 + b, 13, 19 + b, C.moleOveralls);
-    d.line(19, 16 + b, 19, 19 + b, C.moleOveralls);
-    d.px(13, 19 + b, C.moleHatBand);
-    d.px(19, 19 + b, C.moleHatBand);
+    d.line(13, 16 + b, 13, 19 + b, C.overalls);
+    d.line(19, 16 + b, 19, 19 + b, C.overalls);
+    d.px(13, 19 + b, C.hatBand);
+    d.px(19, 19 + b, C.hatBand);
   }
+  // со спины хвост — поверх комбинезона, свисает к земле и покачивается
+  // (спереди хвост не рисуем: за телом он читается как лишняя лапа)
+  if (S.tail && back) tailBack(d, S, b, pose.tail);
   // руки
   const arm = (side) => {
     const x = side < 0 ? 9 : 23;
     const swing = side < 0 ? pose.swingL : pose.swingR;
     if (pose.arms === 'forward') {
-      d.rect(side < 0 ? 10 : 21, 18 + b, 2, 4, C.moleBody);
-      d.ellipse(side < 0 ? 12 : 20, 24 + b, 2, 1.5, C.molePaws);
+      d.rect(side < 0 ? 10 : 21, 18 + b, 2, 4, S.body);
+      d.ellipse(side < 0 ? 12 : 20, 24 + b, 2, 1.5, S.paws);
     } else if (pose.arms === 'carry' && !back) {
-      d.rect(side < 0 ? 10 : 21, 17 + b, 2, 3, C.moleBody);
-      d.ellipse(side < 0 ? 12 : 20, 19 + b, 2, 1.5, C.molePaws);
+      d.rect(side < 0 ? 10 : 21, 17 + b, 2, 3, S.body);
+      d.ellipse(side < 0 ? 12 : 20, 19 + b, 2, 1.5, S.paws);
     } else {
-      d.rect(x, 17 + b, 2, 4, C.moleBody);
-      d.ellipse(x + (side < 0 ? 0 : 1), 21 + b + swing, 1.5, 1.5, C.molePaws);
+      d.rect(x, 17 + b, 2, 4, S.body);
+      d.ellipse(x + (side < 0 ? 0 : 1), 21 + b + swing, 1.5, 1.5, S.paws);
     }
   };
   arm(-1);
   arm(1);
-  // голова
-  d.ellipse(16, 10 + b, 6, 5, C.moleBody);
-  if (!back) {
-    d.ellipse(16, 13 + b, 2.5, 1.5, C.moleSnout);
-    d.rect(15, 12 + b, 2, 1, C.moleNose);
-    d.px(13, 10 + b, C.moleEyes);
-    d.px(19, 10 + b, C.moleEyes);
+  // уши — по бокам шляпы
+  if (S.ears) {
+    ear(d, S, 10, 3 + b, back);
+    ear(d, S, 22, 3 + b, back);
   }
-  // соломенная шляпа
-  d.ellipse(16, 6 + b, 9, 1.5, C.moleHat);
-  d.rect(12, 1 + b, 9, 5, C.moleHat);
-  d.rect(12, 4 + b, 9, 1, C.moleHatBand);
+  // голова
+  d.ellipse(16, 10 + b, 6, 5, S.body);
+  if (!back) {
+    if (S.mask) {
+      d.ellipse(11.5, 12 + b, 1.5, 1, S.light); // щёки
+      d.ellipse(20.5, 12 + b, 1.5, 1, S.light);
+      d.ellipse(13, 10 + b, 2.5, 1.2, S.dark);  // маска
+      d.ellipse(19, 10 + b, 2.5, 1.2, S.dark);
+      d.px(13, 8 + b, S.light);                  // светлые брови
+      d.px(19, 8 + b, S.light);
+    }
+    d.ellipse(16, 13 + b, S.mask ? 3 : 2.5, 1.5, S.snout);
+    d.rect(15, 12 + b, 2, 1, S.nose);
+    d.px(13, 10 + b, S.eyes);
+    d.px(19, 10 + b, S.eyes);
+    if (S.mask) {
+      d.px(14, 9 + b, S.light); // блик в глазах, чтобы не терялись в маске
+      d.px(20, 9 + b, S.light);
+    }
+  }
+  hat(d, b, 9);
 }
 
 // Профиль, мордочка влево (вправо — зеркально)
-function drawMoleSide(d, pose) {
+function drawHeroSide(d, pose, S) {
   const b = pose.bob;
-  d.rect(12 + pose.footL, 26 + b, 3, 4 - b - pose.liftL, C.moleBody);
-  d.rect(17 + pose.footR, 26 + b, 3, 4 - b - pose.liftR, C.moleBody);
-  d.ellipse(12 + pose.footL, 30 - pose.liftL, 2.5, 1, C.molePaws);
-  d.ellipse(17 + pose.footR, 30 - pose.liftR, 2.5, 1, C.molePaws);
-  d.ellipse(17, 17 + b, 5, 3, C.moleBody);
-  d.ellipse(17, 22 + b, 5.5, 5, C.moleOveralls);
-  d.line(15, 16 + b, 15, 19 + b, C.moleOveralls);
+  // хвост — сзади, покачивается при ходьбе
+  if (S.tail) tailSide(d, S, b, pose.tail);
+  d.rect(12 + pose.footL, 26 + b, 3, 4 - b - pose.liftL, S.body);
+  d.rect(17 + pose.footR, 26 + b, 3, 4 - b - pose.liftR, S.body);
+  d.ellipse(12 + pose.footL, 30 - pose.liftL, 2.5, 1, S.paws);
+  d.ellipse(17 + pose.footR, 30 - pose.liftR, 2.5, 1, S.paws);
+  d.ellipse(17, 17 + b, 5, 3, S.body);
+  d.ellipse(17, 22 + b, 5.5, 5, C.overalls);
+  d.line(15, 16 + b, 15, 19 + b, C.overalls);
   // ближняя рука
   if (pose.arms === 'forward') {
-    d.rect(12, 18 + b, 3, 2, C.moleBody);
-    d.ellipse(10, 23 + b, 2, 1.5, C.molePaws);
+    d.rect(12, 18 + b, 3, 2, S.body);
+    d.ellipse(10, 23 + b, 2, 1.5, S.paws);
   } else if (pose.arms === 'carry') {
-    d.rect(12, 17 + b, 3, 2, C.moleBody);
-    d.ellipse(10, 19 + b, 2, 1.5, C.molePaws);
+    d.rect(12, 17 + b, 3, 2, S.body);
+    d.ellipse(10, 19 + b, 2, 1.5, S.paws);
   } else {
-    d.rect(15, 18 + b, 2, 4, C.moleBody);
-    d.ellipse(15 + pose.swingL, 22 + b, 1.5, 1.5, C.molePaws);
+    d.rect(15, 18 + b, 2, 4, S.body);
+    d.ellipse(15 + pose.swingL, 22 + b, 1.5, 1.5, S.paws);
   }
-  // голова с длинной мордочкой
-  d.ellipse(16, 10 + b, 5.5, 5, C.moleBody);
-  d.ellipse(10, 12 + b, 3.5, 1.5, C.moleSnout);
-  d.rect(6, 11 + b, 2, 2, C.moleNose);
-  d.px(13, 9 + b, C.moleEyes);
-  d.ellipse(16, 6 + b, 8, 1.5, C.moleHat);
-  d.rect(12, 1 + b, 8, 5, C.moleHat);
-  d.rect(12, 4 + b, 8, 1, C.moleHatBand);
+  if (S.ears) ear(d, S, 20, 3 + b, false); // ухо на затылке, из-за шляпы
+  d.ellipse(16, 10 + b, 5.5, 5, S.body);
+  if (S.mask) {
+    // енот: короткая острая мордочка, маска, светлая щека
+    d.ellipse(15.5, 13 + b, 1.5, 1, S.light);
+    d.ellipse(11, 12 + b, 3, 1.5, S.snout);
+    d.ellipse(13, 10 + b, 2.5, 1.2, S.dark);
+    d.px(13, 8 + b, S.light);
+    d.rect(7, 11 + b, 2, 2, S.nose);
+    d.px(12, 10 + b, S.eyes);
+    d.px(13, 9 + b, S.light);
+  } else {
+    // крот: длинная мордочка с розовым носом
+    d.ellipse(10, 12 + b, 3.5, 1.5, S.snout);
+    d.rect(6, 11 + b, 2, 2, S.nose);
+    d.px(13, 9 + b, S.eyes);
+  }
+  hat(d, b, 8);
 }
 
-function molePose(anim, i) {
-  const base = { bob: 0, liftL: 0, liftR: 0, footL: 0, footR: 0, swingL: 0, swingR: 0, arms: 'down' };
-  if (anim === 'idle') return { ...base, bob: [0, 0, 1, 0][i] }; // дыхание
-  if (anim === 'act') return { ...base, bob: [0, 1, 2, 1][i], arms: 'forward' };
+function heroPose(anim, i) {
+  const base = { bob: 0, liftL: 0, liftR: 0, footL: 0, footR: 0, swingL: 0, swingR: 0, arms: 'down', tail: 0 };
+  if (anim === 'idle') return { ...base, bob: [0, 0, 1, 0][i], tail: [0, 0, 0, 1][i] }; // дыхание, хвост шевелится
+  if (anim === 'act') return { ...base, bob: [0, 1, 2, 1][i], arms: 'forward', tail: [0, -1, -1, 0][i] };
   // ходьба и «несёт»: 6 кадров шага
   const p = (i / 6) * Math.PI * 2;
   const s = Math.sin(p);
@@ -116,19 +190,22 @@ function molePose(anim, i) {
     swingL: s > 0.3 ? -1 : s < -0.3 ? 1 : 0,
     swingR: s > 0.3 ? 1 : s < -0.3 ? -1 : 0,
     arms: anim === 'carry' ? 'carry' : 'down',
+    tail: Math.round(Math.cos(p)),
   };
 }
 
-export function drawMoleSheet() {
-  const sheet = new PixelSheet(MOLE.frameW * MOLE.cols, MOLE.frameH * MOLE.rows);
-  for (const [anim, [start, count]] of Object.entries(MOLE.anims)) {
+// Лист кадров героя для скина: 'raccoon' или 'mole'
+export function drawHeroSheet(skin) {
+  const S = SKINS[skin];
+  const sheet = new PixelSheet(HERO.frameW * HERO.cols, HERO.frameH * HERO.rows);
+  for (const [anim, [start, count]] of Object.entries(HERO.anims)) {
     for (let i = 0; i < count; i++) {
-      const pose = molePose(anim, i);
+      const pose = heroPose(anim, i);
       const col = start + i;
-      drawMoleFront(sheet.frame(col, MOLE.dirs.down, 32, 32), pose, false);
-      drawMoleSide(sheet.frame(col, MOLE.dirs.left, 32, 32), pose);
-      drawMoleSide(sheet.frame(col, MOLE.dirs.right, 32, 32, true), pose);
-      drawMoleFront(sheet.frame(col, MOLE.dirs.up, 32, 32), pose, true);
+      drawHeroFront(sheet.frame(col, HERO.dirs.down, 32, 32), pose, false, S);
+      drawHeroSide(sheet.frame(col, HERO.dirs.left, 32, 32), pose, S);
+      drawHeroSide(sheet.frame(col, HERO.dirs.right, 32, 32, true), pose, S);
+      drawHeroFront(sheet.frame(col, HERO.dirs.up, 32, 32), pose, true, S);
     }
   }
   return sheet.finish();

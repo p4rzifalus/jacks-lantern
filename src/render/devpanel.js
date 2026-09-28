@@ -2,6 +2,7 @@
 // Значения запоминаются в браузере; «скопировать значения» — чтобы вписать их в config.js.
 import GUI from 'lil-gui';
 import { FX, QUALITY } from '../config.js';
+import { HERO_SKINS } from '../art/sprite-art.js';
 import { rememberQuality } from './quality.js';
 
 const STORAGE_KEY = 'ogorod2-fx';
@@ -15,7 +16,7 @@ export function loadFxSettings(quality) {
   return settings;
 }
 
-export function createDevPanel(settings, pipeline, quality, weather, audio) {
+export function createDevPanel(settings, pipeline, quality, weather, audio, getHero) {
   const save = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -57,6 +58,15 @@ export function createDevPanel(settings, pipeline, quality, weather, audio) {
   color.add(settings, 'lutStrength', 0, 1, 0.05).name('сила коррекции').onChange(changed);
   color.add(settings, 'vignette', 0, 1, 0.05).name('виньетка').onChange(changed);
   color.add(settings, 'grain', 0, 0.5, 0.01).name('зерно').onChange(changed);
+
+  if (getHero) {
+    // Выбор героя — только для проверки; постоянный выбор — config.js → HERO_SKIN
+    const names = { енот: 'raccoon', крот: 'mole' };
+    const who = { skin: null };
+    gui.add(who, 'skin', Object.fromEntries(Object.entries(names).filter(([, s]) => HERO_SKINS.includes(s))))
+      .name('герой').onChange((skin) => getHero().setSkin(skin));
+    queueMicrotask(() => { who.skin = getHero().skin; gui.controllersRecursive().forEach((c) => c.updateDisplay()); });
+  }
 
   if (weather) {
     const sky = gui.addFolder('Погода');
