@@ -364,3 +364,115 @@ export function drawDecorSheet() {
   });
   return sheet.finish();
 }
+
+// ---------- Духи ----------
+// Кадр 32×32. Строки: 0 — призрак, 1 — скелет, 2 — блуждающий огонь, 3 — монета (кадр 0; дух несёт её из корзинки).
+// Колонки: движется 0–3, копается 4–7, несёт 8–11. Все смотрят на зрителя; влево-вправо — зеркалом.
+// Светящиеся пиксели (последний аргумент true) подхватывает свечение — ночью духи сияют.
+export const SPIRIT = {
+  frameW: 32, frameH: 32, cols: 12, rows: 4,
+  anims: { move: [0, 4], act: [4, 4], carry: [8, 4] },
+  rows_: { ghost: 0, skeleton: 1, wisp: 2, coin: 3 },
+};
+
+// Призрак: круглая голова, волнистый подол, румянец. Весь светится мягко.
+function drawGhost(d, anim, i) {
+  const b = [0, 1, 2, 1][i];               // покачивается
+  const wave = i % 2;                       // подол колышется
+  const y = 6 + b;
+  d.ellipse(16, y + 7, 8, 7, C.ghost, true);
+  d.rect(8, y + 7, 17, 9, C.ghost, true);
+  for (let x = 8; x <= 24; x++) {           // волнистый подол
+    const down = ((x + wave * 2) % 4) < 2 ? 1 : 0;
+    d.rect(x, y + 16, 1, 1 + down, C.ghostShade, true);
+  }
+  d.rect(9, y + 13, 15, 3, C.ghostShade, true); // тень к низу
+  d.rect(9, y + 7, 15, 6, C.ghost, true);
+  // ручки
+  const armY = anim === 'carry' ? y + 9 : anim === 'act' ? y + 12 + (i % 2) : y + 10;
+  d.ellipse(anim === 'carry' ? 10 : 7, armY, 1.5, 1.5, C.ghostShade, true);
+  d.ellipse(anim === 'carry' ? 22 : 25, armY, 1.5, 1.5, C.ghostShade, true);
+  // лицо
+  d.rect(12, y + 6, 2, 2, C.spiritEyes);
+  d.rect(19, y + 6, 2, 2, C.spiritEyes);
+  d.px(12, y + 6, C.ghost);                  // блик в глазах
+  d.px(19, y + 6, C.ghost);
+  d.rect(10, y + 9, 2, 1, C.ghostCheeks);
+  d.rect(21, y + 9, 2, 1, C.ghostCheeks);
+  if (anim === 'act') d.rect(15, y + 9, 2, 2, C.spiritEyes); // «о!» — нашёл
+  else d.rect(15, y + 10, 2, 1, C.spiritEyes);
+}
+
+// Скелет: большой череп, светящиеся глазницы, мелкий шаг; кости слегка светятся (ночью его видно)
+function drawSkeleton(d, anim, i) {
+  const step = anim === 'act' ? 0 : i % 2;
+  const b = anim === 'act' ? [0, 1, 2, 1][i] : step;
+  // ножки
+  d.line(14, 25 + b, 14 - step, 30, C.bone, true);
+  d.line(18, 25 + b, 18 + step, 30, C.bone, true);
+  d.rect(13 - step, 30, 2, 1, C.boneShade);
+  d.rect(18 + step, 30, 2, 1, C.boneShade);
+  // тазик, позвоночник, рёбрышки
+  d.rect(13, 23 + b, 7, 2, C.bone, true);
+  d.line(16, 17 + b, 16, 23 + b, C.boneShade);
+  d.line(13, 18 + b, 19, 18 + b, C.bone, true);
+  d.line(13, 20 + b, 19, 20 + b, C.bone, true);
+  // ручки
+  if (anim === 'carry') {
+    d.line(12, 18 + b, 11, 15 + b, C.bone, true);
+    d.line(20, 18 + b, 21, 15 + b, C.bone, true);
+  } else if (anim === 'act') {
+    d.line(12, 18 + b, 11, 23 + b + (i % 2), C.bone, true);
+    d.line(20, 18 + b, 21, 23 + b + ((i + 1) % 2), C.bone, true);
+  } else {
+    d.line(12, 18 + b, 10 + step, 22 + b, C.bone, true);
+    d.line(20, 18 + b, 22 - step, 22 + b, C.bone, true);
+  }
+  // черепушка
+  d.ellipse(16, 10 + b, 7, 6, C.bone, true);
+  d.rect(12, 15 + b, 9, 2, C.boneShade);     // челюсть
+  d.px(14, 16 + b, C.bone, true);
+  d.px(16, 16 + b, C.bone, true);
+  d.px(18, 16 + b, C.bone, true);
+  d.rect(12, 9 + b, 3, 3, C.spiritEyes);     // глазницы
+  d.rect(18, 9 + b, 3, 3, C.spiritEyes);
+  d.px(13, 10 + b, C.boneGlow, true);        // огоньки в глазницах
+  d.px(19, 10 + b, C.boneGlow, true);
+  d.px(16, 13 + b, C.spiritEyes);            // носик
+}
+
+// Блуждающий огонь: язык пламени с глазами, пляшет
+function drawWisp(d, anim, i) {
+  const b = [0, 1, 0, -1][i];
+  const cy = 18 + (anim === 'act' ? [0, 1, 2, 1][i] : 0);
+  d.ellipse(16, cy, 6, 6, C.wispFlame, true);
+  // язычки сверху — каждый кадр разные
+  const tips = [[13, 8, 16, 5, 19, 9], [12, 9, 16, 4, 20, 8], [13, 7, 17, 5, 19, 9], [12, 8, 15, 5, 19, 8]][i];
+  for (let k = 0; k < 6; k += 2) d.line(16, cy - 3, tips[k] + b, tips[k + 1], C.wispTip, true);
+  d.ellipse(16, cy - 3, 3, 3, C.wispFlame, true);
+  d.ellipse(16, cy + 1, 3.5, 3.5, C.wispCore, true);
+  d.px(14, cy, C.spiritEyes);                // глазки
+  d.px(18, cy, C.spiritEyes);
+  if (anim === 'carry') {                    // «ручки»-искорки держат добычу
+    d.px(10, cy - 3, C.wispTip, true);
+    d.px(22, cy - 3, C.wispTip, true);
+  }
+}
+
+function drawCoin(d) {
+  d.ellipse(16, 16, 4, 4, C.spiritCoin, true);
+  d.rect(15, 14, 2, 5, '#b8862a');
+}
+
+export function drawSpiritSheet() {
+  const sheet = new PixelSheet(SPIRIT.frameW * SPIRIT.cols, SPIRIT.frameH * SPIRIT.rows);
+  const draw = { ghost: drawGhost, skeleton: drawSkeleton, wisp: drawWisp };
+  for (const [kind, row] of Object.entries(SPIRIT.rows_)) {
+    if (kind === 'coin') continue;
+    for (const [anim, [start, count]] of Object.entries(SPIRIT.anims)) {
+      for (let i = 0; i < count; i++) draw[kind](sheet.frame(start + i, row, 32, 32), anim, i);
+    }
+  }
+  drawCoin(sheet.frame(0, SPIRIT.rows_.coin, 32, 32));
+  return sheet.finish();
+}

@@ -27,6 +27,8 @@ import { createSound } from './audio/index.js';
 import { createDaytime } from './daytime.js';
 import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
+import { createNight } from './night.js';
+import { createSpirits } from './world/spirits.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -43,7 +45,7 @@ const daytime = createDaytime(); // часы суток: при каждом в�
 const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, daytime }); // как выглядит время суток
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
-const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight }) : null;
+const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight, spawnSpirit: () => night.spawnNow() }) : null;
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
@@ -77,6 +79,30 @@ const hero = new Hero();
 hero.position.copy(cellToWorld(HERO_START.x, HERO_START.z));
 hero.heading = hero.targetHeading = Math.PI; // смотрит на огород
 scene.add(hero.object);
+
+// ---------- Ночь: духи ----------
+// Правила (кто, когда, что уносит) — night.js; как выглядят и летают — world/spirits.js
+const night = createNight({
+  game,
+  daytime,
+  onSpawn: (spirit) => spirits.add(spirit),
+  onStolen(spirit, loot) {
+    ui.hint(night.describe(spirit, loot), 2800);
+  },
+  onMorning(text) {
+    spirits.dawn();
+    if (text) ui.hint(text, 6000); // утром — что пропало за ночь
+  },
+});
+const spirits = createSpirits(scene, camera, landmarks.island, night, {
+  onAppear: () => sound.spiritAppear(),
+  onGrab(spirit, loot, at) {
+    sound.spiritGrab();
+    if (loot.coins) effects.coins(at);
+    else effects.sparkle(at);
+  },
+  onLeave: () => sound.spiritLeave(),
+});
 
 const hoverFrame = createHoverFrame();
 const frontMarker = createFrontMarker();
@@ -291,11 +317,15 @@ renderer.setAnimationLoop((now) => {
   gardenView.update();
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
-  if (!menu.isOpen) daytime.update(dt); // время идёт только в игре (в меню и на стартовом экране — стоит)
+  if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
+    daytime.update(dt);
+    night.update();
+    spirits.update(dt, now / 1000);
+  }
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
-  const { lamps, night } = dayNight.state;
+  const { lamps, night: nightDepth } = dayNight.state;
   if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
     shownLamps = lamps;
     setLampLevel(lamps);
@@ -310,7 +340,7 @@ renderer.setAnimationLoop((now) => {
     windStrength: decor.windStrength,
     rain: weather.intensity,
     dark: lamps, // вечер и ночь: сверчки; ночь: сова и тихая музыка; утро и день: птицы
-    night,
+    night: nightDepth,
   });
   lanterns.update(now / 1000, lamps);
 
@@ -324,7 +354,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

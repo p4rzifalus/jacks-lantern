@@ -170,6 +170,8 @@ export function createFogSea(scene, quality, islandBounds) {
       y: -0.4 - size * 0.25 - ((i * 0.53) % 1), // верх облачка — ниже земли, на огород не заходит
       speed: 0.15 + ((i * 0.11) % 0.15),
     });
+    const w = wisps[wisps.length - 1];
+    holder.position.set(center.x + Math.cos(w.angle) * w.radius, w.y, center.y + Math.sin(w.angle) * w.radius); // сразу на своё место
   }
 
   function apply() {

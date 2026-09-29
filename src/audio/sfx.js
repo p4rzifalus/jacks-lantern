@@ -59,6 +59,32 @@ export function createSfx(engine) {
       for (let i = 0; i < count; i++) clink(t + 0.12 + i * rand(0.05, 0.09), rand(0.9, 1.15), 0.1);
     },
 
+    // Дух поднимается из тумана: тихое «у-у-у», будто ветер в трубе, с эхом
+    spiritAppear() {
+      if (!ready()) return;
+      const t = now();
+      const base = rand(420, 520);
+      const pan = rand(-0.6, 0.6);
+      tone(engine, FX, { when: t, freq: base * 0.8, freqEnd: base * 1.15, glide: 0.6, gain: 0.05, attack: 0.25, hold: 0.3, decay: 0.7, filter: 1400, pan, reverb: 0.9 });
+      tone(engine, FX, { when: t + 0.05, freq: base * 1.2, freqEnd: base * 1.5, glide: 0.6, gain: 0.025, attack: 0.3, hold: 0.2, decay: 0.6, filter: 1800, pan, reverb: 0.9 });
+    },
+
+    // Дух схватил добычу: хихиканье «хи-хи-хи» — три коротких писка вниз
+    spiritGrab() {
+      if (!ready()) return;
+      const t = now();
+      const base = rand(1100, 1400);
+      for (let i = 0; i < 3; i++) {
+        tone(engine, FX, { when: t + i * 0.11, freq: base * (1 - i * 0.08), freqEnd: base * (0.85 - i * 0.08), glide: 0.07, type: 'triangle', gain: 0.05, attack: 0.005, decay: 0.08, reverb: 0.4 });
+      }
+    },
+
+    // Дух улетает: мягкий шорох, уходящий вниз
+    spiritLeave() {
+      if (!ready()) return;
+      noise(engine, FX, { when: now(), type: 'bandpass', freq: 1800, freqEnd: 600, q: 1.2, gain: 0.05, attack: 0.1, decay: 0.5, reverb: 0.5, pan: rand(-0.5, 0.5) });
+    },
+
     // Открылись новые семена: короткое радостное арпеджио
     unlocked() {
       if (!ready()) return;

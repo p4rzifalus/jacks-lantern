@@ -52,6 +52,18 @@ export const COLORS = {
   raccoonLight: '#e8e2d6',  // мордочка, щёки, светлые полоски
   raccoonNose: '#1e1a18',
   raccoonEyes: '#111111',
+  // Духи (ночью светятся)
+  ghost: '#e6eeff',         // призрак
+  ghostShade: '#a9b6e6',
+  ghostCheeks: '#ffb3cc',
+  spiritEyes: '#2a2440',
+  bone: '#efe8d6',          // скелет
+  boneShade: '#b3a98f',
+  boneGlow: '#7ae8ff',      // огоньки в глазницах
+  wispCore: '#fff4c2',      // блуждающий огонь
+  wispFlame: '#79d8ff',
+  wispTip: '#b8f0ff',
+  spiritCoin: '#f2c24a',    // монетка в лапах у духа
   // Одежда огородника (общая для всех скинов)
   overalls: '#3a5a8a',
   hat: '#e8cf8a',
@@ -152,6 +164,23 @@ export const QUALITY = {
   medium: { tiltShift: true, msaa: 2, maxDpr: 1.25, shadowMap: 1024, ao: false, godRays: true, particles: 0.7, lanternShadows: 0, lanternLights: 5, textureSize: 1024, fogLayers: 3, fogWisps: 6 },
   high:   { tiltShift: true, msaa: 2, maxDpr: 1.5, shadowMap: 2048, ao: true, godRays: true, particles: 1, lanternShadows: 1, lanternLights: 7, textureSize: 1024, fogLayers: 3, fogWisps: 8 },
   ultra:  { tiltShift: true, msaa: 4, maxDpr: 2, shadowMap: 4096, ao: true, godRays: true, particles: 1.5, lanternShadows: 3, lanternLights: 7, textureSize: 1024, fogLayers: 4, fogWisps: 10 },
+};
+
+// Нечисть: ночью духи поднимаются из тумана и пытаются утащить урожай с грядок или монеты из корзинки.
+// Никого не прогоняют и не уничтожают (защита — растения, этап 8); набеги — только во время игры.
+export const SPIRITS = {
+  perNight: [5, 6],      // сколько духов приходит за ночь (случайно между)
+  maxCropsPerNight: 4,   // сколько спелых грядок они могут унести за ночь
+  coinShare: 0.1,        // из корзинки дух уносит такую долю монет…
+  maxCoins: 20,          // …но не больше стольких
+  basketChance: 0.35,    // как часто дух летит к корзинке, если есть и монеты, и спелые грядки
+  grabSeconds: 2,        // сколько дух «копается», прежде чем утащить
+  // виды духов: имя (для подсказок), скорость (клеток в секунду), как часто встречается
+  kinds: {
+    ghost: { name: 'Призрак', speed: 1.1, weight: 3 },
+    skeleton: { name: 'Скелет', speed: 0.8, weight: 2 },
+    wisp: { name: 'Блуждающий огонь', speed: 1.7, weight: 2 },
+  },
 };
 
 // Смена дня и ночи (идёт только во время игры; при каждом входе в игру — утро).

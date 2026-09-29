@@ -8,7 +8,7 @@ export const TOOL_IDS = ['seeds', 'water', 'hands'];
 const PLANT_TYPES = Object.keys(PLANTS);
 
 // «5 морковок», «3 тыквы», «1 гриб»
-function countOf(type, n) {
+export function countOf(type, n) {
   const [one, few, many] = PLANTS[type].forms;
   const mod10 = n % 10;
   const mod100 = n % 100;
@@ -118,6 +118,26 @@ export function createGame({ onHint, onEffect, onChange }) {
     addCoins(n) {
       state.coins += n;
       changed();
+    },
+
+    // ---------- Ночь: духи уносят добро (решает night.js) ----------
+    // Спелые грядки — куда могут прийти духи
+    ripeCells() {
+      return garden.cells.filter((cell) => garden.stage(cell) === RIPE).map(({ x, z }) => ({ x, z }));
+    },
+    // Унести спелый урожай с грядки. Возвращает, что унесли, или null (уже собрали)
+    stealCrop(c) {
+      if (garden.stage(c) !== RIPE) return null;
+      const type = garden.harvest(c);
+      changed();
+      return type;
+    },
+    // Унести монеты из корзинки (сколько — решает night.js). Возвращает, сколько унесли
+    stealCoins(amount) {
+      const taken = Math.min(state.coins, Math.max(0, Math.floor(amount)));
+      state.coins -= taken;
+      if (taken) changed();
+      return taken;
     },
 
     // Всё, что нужно показать в интерфейсе
