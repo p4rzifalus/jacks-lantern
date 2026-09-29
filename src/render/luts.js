@@ -48,6 +48,18 @@ function buildLUT(name, fn) {
 
 export function createLUTs() {
   return {
+    // Утро: розово-золотые света, мягкие сиреневые тени, воздух чуть светлее
+    morning: buildLUT('morning', grade({
+      shadows: [0.5, 0.46, 0.6], shadowAmount: 0.35,
+      highlights: [0.66, 0.52, 0.44], highlightAmount: 0.38,
+      saturation: 1.18, contrast: 1.06, lift: 0.03,
+    })),
+    // День: золотой осенний свет — тёплые янтарные света, мягкие тёплые тени, сочный цвет
+    day: buildLUT('day', grade({
+      shadows: [0.52, 0.46, 0.5], shadowAmount: 0.25,
+      highlights: [0.64, 0.53, 0.4], highlightAmount: 0.32,
+      saturation: 1.2, contrast: 1.12, lift: 0.01,
+    })),
     // Вечер: под наше небо — тени в сиреневый, света в янтарный, чуть приглушённый цвет
     evening: buildLUT('evening', grade({
       shadows: [0.5, 0.45, 0.62], shadowAmount: 0.45,
@@ -72,6 +84,28 @@ export function createLUTs() {
       highlights: [0.58, 0.52, 0.46], highlightAmount: 0.2,
       saturation: 0.85, contrast: 1.05, lift: 0.03,
     })),
+    // Ночь: лунная синева в тенях, приглушённый цвет; тёплые фонари остаются тёплыми
+    night: buildLUT('night', grade({
+      shadows: [0.36, 0.42, 0.7], shadowAmount: 0.6,
+      highlights: [0.6, 0.52, 0.44], highlightAmount: 0.15,
+      saturation: 0.8, contrast: 1.08, lift: 0.02,
+    })),
     neutral: LookupTexture.createNeutral(SIZE),
+  };
+}
+
+// Смесь двух таблиц — для плавной смены времени суток: mix(a, b, t) — от a (t = 0) к b (t = 1)
+export function createLUTBlend() {
+  const data = new Float32Array(SIZE ** 3 * 4);
+  const texture = new LookupTexture(data, SIZE);
+  texture.name = 'auto';
+  return {
+    texture,
+    mix(a, b, t) {
+      const da = a.image.data;
+      const db = b.image.data;
+      for (let i = 0; i < data.length; i++) data[i] = da[i] + (db[i] - da[i]) * t;
+      texture.needsUpdate = true;
+    },
   };
 }

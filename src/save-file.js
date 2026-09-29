@@ -24,10 +24,14 @@ function withStore(mode, action) {
     request.onupgradeneeded = () => request.result.createObjectStore('files');
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
-      const tx = request.result.transaction('files', mode);
-      const r = action(tx.objectStore('files'));
-      tx.oncomplete = () => resolve(r?.result ?? null);
-      tx.onerror = () => resolve(null);
+      try {
+        const tx = request.result.transaction('files', mode);
+        const r = action(tx.objectStore('files'));
+        tx.oncomplete = () => resolve(r?.result ?? null);
+        tx.onerror = () => resolve(null);
+      } catch {
+        resolve(null); // не получилось — просто не запомним файл
+      }
     };
   });
 }

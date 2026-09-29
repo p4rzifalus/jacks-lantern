@@ -73,6 +73,49 @@ const PIXEL_ICONS = {
     '............',
     '............',
   ],
+  // время суток: солнце (день), половинка солнца над горизонтом (утро и вечер), месяц (ночь)
+  sun: [
+    '.....##.....',
+    '.#...##...#.',
+    '..#......#..',
+    '....####....',
+    '...######...',
+    '##.######.##',
+    '##.######.##',
+    '...######...',
+    '....####....',
+    '..#......#..',
+    '.#...##...#.',
+    '.....##.....',
+  ],
+  sunrise: [
+    '............',
+    '............',
+    '.....##.....',
+    '.#...##...#.',
+    '..#......#..',
+    '....####....',
+    '...######...',
+    '.#.######.#.',
+    '............',
+    '############',
+    '............',
+    '..########..',
+  ],
+  moon: [
+    '............',
+    '....####....',
+    '...###......',
+    '..###.......',
+    '.####.......',
+    '.####.......',
+    '.####.......',
+    '.#####....#.',
+    '..######.##.',
+    '...#######..',
+    '....####....',
+    '............',
+  ],
   // лупа — крупный план
   zoom: [
     '............',
@@ -195,6 +238,15 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
   const coinsBox = el('div', 'hud title');
   document.body.appendChild(coinsBox);
 
+  // Время суток под монетами: значок, название и полоска — сколько осталось до следующей части
+  const DAYTIME_ICONS = { morning: 'sunrise', day: 'sun', evening: 'sunrise', night: 'moon' };
+  const daytimeBox = el('div', 'daytime', '<span class="daytime-icon"></span><span class="daytime-name title"></span><span class="daytime-bar"><i></i></span>');
+  const daytimeIcon = daytimeBox.querySelector('.daytime-icon');
+  const daytimeName = daytimeBox.querySelector('.daytime-name');
+  const daytimeFill = daytimeBox.querySelector('.daytime-bar i');
+  let shownPhase = null;
+  document.body.appendChild(daytimeBox);
+
   // Магазин
   const shop = el('div', 'shop-backdrop');
   shop.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Магазин семян</span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="shop-list"></div></div>';
@@ -236,6 +288,17 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
         const buyButton = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} за ${row.seedPrice * n}</button>`;
         return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div><div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
       }).join('');
+    },
+
+    // phase — { id, name, progress } из daytime.js
+    setDaytime(phase) {
+      if (phase.id !== shownPhase) {
+        shownPhase = phase.id;
+        daytimeIcon.innerHTML = pixelIcon(DAYTIME_ICONS[phase.id] || 'sun');
+        daytimeName.textContent = phase.name;
+        daytimeBox.dataset.phase = phase.id;
+      }
+      daytimeFill.style.width = `${Math.round((1 - phase.progress) * 100)}%`;
     },
 
     hint(text, ms = 1600) {

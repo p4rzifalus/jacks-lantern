@@ -18,11 +18,14 @@ import { createWeather } from './render/weather.js';
 import { createEffects } from './world/effects.js';
 import { createLanterns } from './world/lanterns.js';
 import { createFogSea } from './world/fog-sea.js';
+import { createLightRays } from './world/light-rays.js';
 import { applySkyReflex } from './render/sky-reflex.js';
 import { createDevPanel, loadFxSettings } from './render/devpanel.js';
 import { loadGame, saveGame, clearSave, storeSave, packSave } from './save.js';
 import { createMenu } from './menu.js';
 import { createSound } from './audio/index.js';
+import { createDaytime } from './daytime.js';
+import { createDayNight } from './render/day-night.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -32,11 +35,14 @@ const lanterns = createLanterns(scene, quality);
 const effects = createEffects(scene, quality, lanterns.positions);
 const weather = createWeather(scene, quality, lighting, landmarks.island);
 const fogSea = createFogSea(scene, quality, landmarks.island); // туман под островом и вокруг
+const lightRays = createLightRays(scene, quality, lighting); // рассветные лучи и лунное пятно
 const fx = loadFxSettings(quality);
 const pipeline = createPipeline(renderer, scene, camera, fx, quality);
+const daytime = createDaytime(); // часы суток: при каждом входе в игру — утро
+const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, daytime }); // как выглядит время суток
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
-const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea) : null;
+const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight }) : null;
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
@@ -267,6 +273,8 @@ applySkyReflex(scene);
 let frameCount = 0;
 
 let last = performance.now();
+let daytimeFrame = 0;
+ui.setDaytime(daytime.phase());
 renderer.setAnimationLoop((now) => {
   if (++frameCount % 60 === 0) applySkyReflex(scene);
   const dt = Math.min((now - last) / 1000, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
@@ -277,6 +285,10 @@ renderer.setAnimationLoop((now) => {
   gardenView.update();
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
+  if (!menu.isOpen) daytime.update(dt); // время идёт только в игре (в меню и на стартовом экране — стоит)
+  dayNight.update();
+  lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
+  if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
   decor.fireflyVisibility = 1 - weather.wetness; // в дождь светлячки прячутся
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness });
   island.update(now / 1000);
@@ -299,7 +311,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

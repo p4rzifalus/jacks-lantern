@@ -11,12 +11,18 @@ export function loadFxSettings(quality) {
   const settings = { ...FX };
   if (!import.meta.env.DEV) return settings; // в опубликованной игре — ровно как в config.js
   try {
-    Object.assign(settings, JSON.parse(localStorage.getItem(STORAGE_KEY)) || {});
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    // с появлением смены суток цветокоррекция по умолчанию — «auto»; старый выбор из панели забываем один раз
+    if (!localStorage.getItem('ogorod2-fx-daytime')) {
+      delete saved.lut;
+      localStorage.setItem('ogorod2-fx-daytime', '1');
+    }
+    Object.assign(settings, saved);
   } catch { /* нет сохранённого — берём из config.js */ }
   return settings;
 }
 
-export function createDevPanel(settings, pipeline, quality, weather, audio, getHero, fogSea) {
+export function createDevPanel(settings, pipeline, quality, weather, audio, getHero, fogSea, time) {
   const save = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -66,6 +72,23 @@ export function createDevPanel(settings, pipeline, quality, weather, audio, getH
     gui.add(who, 'skin', Object.fromEntries(Object.entries(names).filter(([, s]) => HERO_SKINS.includes(s))))
       .name('герой').onChange((skin) => getHero().setSkin(skin));
     queueMicrotask(() => { who.skin = getHero().skin; gui.controllersRecursive().forEach((c) => c.updateDisplay()); });
+  }
+
+  if (time) {
+    // Время суток: перемотать и ускорить — только для проверки (длины частей — config.js → DAY_CYCLE)
+    const day = gui.addFolder('Время суток');
+    day.add(time.daytime, 'fraction', 0, 0.999, 0.001).name('время (0 — утро)').listen()
+      .onChange(() => time.dayNight.refresh());
+    day.add(time.daytime, 'speed', 0, 60, 1).name('ускорение');
+    const jump = (id) => () => {
+      const p = time.daytime.phases.find((ph) => ph.id === id);
+      time.daytime.time = p.start + p.seconds / 2;
+      time.dayNight.refresh();
+    };
+    day.add({ go: jump('morning') }, 'go').name('→ утро');
+    day.add({ go: jump('day') }, 'go').name('→ день');
+    day.add({ go: jump('evening') }, 'go').name('→ вечер');
+    day.add({ go: jump('night') }, 'go').name('→ ночь');
   }
 
   if (fogSea) {

@@ -55,7 +55,6 @@ export function createWeather(scene, quality, lighting, islandCore) {
     scene.add(puddle);
   }
 
-  const dry = { hemi: lighting.hemi.intensity, sun: lighting.sun.intensity, fogNear: scene.fog.near, fogFar: scene.fog.far };
   let raining = false;
   let wetness = 0;          // 0 — сухо, 1 — всё мокрое
   let intensity = 0;        // сила дождя 0..1 (плавно нарастает и стихает)
@@ -111,12 +110,8 @@ export function createWeather(scene, quality, lighting, islandCore) {
       drops.update(dt, () => 1);
       splashes.update(dt, (p, t) => 1 + t * 2);
 
-      // лужи проступают, небо и солнце приглушаются, дымка ближе
+      // лужи проступают (небо и солнце приглушает смена дня и ночи — по силе дождя)
       puddleMat.opacity = wetness * 0.9;
-      lighting.hemi.intensity = dry.hemi * (1 - 0.25 * intensity);
-      lighting.sun.intensity = dry.sun * (1 - 0.6 * intensity);
-      scene.fog.near = dry.fogNear - 12 * intensity;
-      scene.fog.far = dry.fogFar - 35 * intensity;
       applyWetness();
     },
   };

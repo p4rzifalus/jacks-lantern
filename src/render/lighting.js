@@ -1,25 +1,24 @@
-// Вечерний свет. Небо — главный источник цвета: из картинки art/sky.png берутся
-// отражения на блестящем, цвет рассеянного света, дымки и отсвета на краях (см. sky-reflex.js).
-// Если картинки нет — запасной градиент и цвета из config.js → LIGHTING.
+// Свет острова: солнце (ночью — луна), рассеянный свет неба, дымка вдали.
+// Цвета и направление меняет смена дня и ночи (render/day-night.js); здесь — сами источники
+// и помощники для неба: градиент, средний цвет, тёплый ореол, окружение для отражений.
 import * as THREE from 'three';
 import { LIGHTING } from '../config.js';
-import { userArtUrl } from '../art/assets.js';
 import { skyUniforms } from './sky-reflex.js';
 
-// Запасное небо: вертикальный градиент из config.js
-function gradientCanvas() {
+// Небо-градиент: stops — [место 0..1, цвет] сверху вниз
+export function gradientCanvas(stops, size = 256) {
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 256;
+  canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, 0, 256);
-  LIGHTING.sky.forEach(([stop, color]) => g.addColorStop(stop, color));
+  const g = ctx.createLinearGradient(0, 0, 0, size);
+  stops.forEach(([stop, color]) => g.addColorStop(stop, color));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillRect(0, 0, size, size);
   return canvas;
 }
 
 // Средний цвет полосы картинки (from, to — доли высоты 0..1)
-function averageColor(canvas, from, to) {
+export function averageColor(canvas, from, to) {
   const small = document.createElement('canvas');
   small.width = small.height = 32;
   const ctx = small.getContext('2d');
@@ -31,30 +30,28 @@ function averageColor(canvas, from, to) {
   return new THREE.Color().setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
 }
 
-// Тёплый ореол за островом — будто свет фонарей рассеивается в вечернем воздухе
-function withHalo(image) {
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+// Тёплый ореол за островом — будто свет фонарей рассеивается в воздухе (рисуем поверх неба)
+export function drawHalo(ctx, width, height, strengthScale = 1) {
   const { color, strength, x, y, radius } = LIGHTING.halo;
-  const cx = x * canvas.width;
-  const cy = y * canvas.height;
-  const r = radius * Math.max(canvas.width, canvas.height);
+  const a = strength * strengthScale;
+  if (a <= 0.001) return;
+  const cx = x * width;
+  const cy = y * height;
+  const r = radius * Math.max(width, height);
   const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
   const c = new THREE.Color(color);
-  const rgba = (a) => `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${a})`;
-  g.addColorStop(0, rgba(strength));
+  const rgba = (k) => `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${k})`;
+  g.addColorStop(0, rgba(a));
   g.addColorStop(1, rgba(0));
+  ctx.save();
   ctx.globalCompositeOperation = 'screen';
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  return canvas;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
 }
 
 // Фон во весь экран без искажений (лишнее обрезается по краям)
-function backdrop(canvas) {
+export function backdrop(canvas) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const imageAspect = canvas.width / canvas.height;
@@ -69,7 +66,7 @@ function backdrop(canvas) {
 }
 
 // Окружение для отражений: небо на верхней полусфере, снизу — тёмная земля. Считается один раз.
-function environmentMap(renderer, canvas, groundColor) {
+export function environmentMap(renderer, canvas, groundColor) {
   const envScene = new THREE.Scene();
   const skyTex = new THREE.CanvasTexture(canvas);
   skyTex.colorSpace = THREE.SRGBColorSpace;
@@ -91,16 +88,13 @@ export function createLighting(renderer, scene, quality, islandBounds) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // мягкие края теней
 
-  // Рассеянный свет: сверху — небо, снизу — тёплый отсвет земли
-  const hemi = new THREE.HemisphereLight(LIGHTING.skyLight, LIGHTING.groundColor, LIGHTING.skyLightIntensity);
+  // Рассеянный свет: сверху — небо, снизу — тёплый отсвет земли (цвет и силу задаёт смена дня и ночи)
+  const hemi = new THREE.HemisphereLight('#ffffff', LIGHTING.groundColor, 1);
   scene.add(hemi);
 
-  // Солнце у горизонта: длинные тени. Область теней — ровно по острову: так тени чётче при том же размере карты
-  const sun = new THREE.DirectionalLight(LIGHTING.sunColor, LIGHTING.sunIntensity);
-  const az = THREE.MathUtils.degToRad(LIGHTING.sunDirection.azimuth);
-  const el = THREE.MathUtils.degToRad(LIGHTING.sunDirection.elevation);
+  // Солнце (ночью — луна). Область теней — ровно по острову: так тени чётче при том же размере карты
+  const sun = new THREE.DirectionalLight('#ffffff', 1);
   const center = new THREE.Vector3((islandBounds.minX + islandBounds.maxX) / 2, 0, (islandBounds.minZ + islandBounds.maxZ) / 2);
-  sun.position.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(25).add(center);
   sun.target.position.copy(center);
   scene.add(sun.target);
   const reach = Math.hypot(islandBounds.maxX - islandBounds.minX, islandBounds.maxZ - islandBounds.minZ) / 2 + 0.5;
@@ -112,27 +106,18 @@ export function createLighting(renderer, scene, quality, islandBounds) {
   Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 50 });
   scene.add(sun);
 
-  scene.fog = new THREE.Fog(LIGHTING.fogColor, LIGHTING.fogNear, LIGHTING.fogFar);
+  scene.fog = new THREE.Fog('#3a3450', LIGHTING.fogNear, LIGHTING.fogFar);
   skyUniforms.uSkyRimStrength.value = LIGHTING.skyReflex;
   skyUniforms.uFadeStrength.value = LIGHTING.bottomFade;
 
-  // Настроить весь свет по картинке неба (или по запасному градиенту)
-  function useSky(canvas) {
-    const top = averageColor(canvas, 0, 0.35);
-    const horizon = averageColor(canvas, 0.7, 1);
-    hemi.color.copy(top).lerp(new THREE.Color(LIGHTING.skyLight), 0.3); // свет сверху — в цвет неба
-    scene.fog.color.copy(horizon);                                       // дымка — цвета горизонта
-    skyUniforms.uSkyRim.value.copy(horizon).lerp(top, 0.3);              // отсвет на краях
-    skyUniforms.uFadeColor.value.copy(horizon);                          // низ острова уходит в горизонт
-    scene.environment?.dispose();
-    scene.environment = environmentMap(renderer, canvas, LIGHTING.groundColor);
-    scene.environmentIntensity = LIGHTING.environmentIntensity;
-    scene.background = backdrop(canvas);
-  }
-
-  useSky(withHalo(gradientCanvas()));
-  const url = userArtUrl('sky');
-  if (url) new THREE.ImageLoader().load(url, (image) => useSky(withHalo(image)));
-
-  return { sun, hemi };
+  return {
+    sun,
+    hemi,
+    // Откуда светит: azimuth — сторона (градусы), elevation — высота над горизонтом
+    setSunDirection(azimuth, elevation) {
+      const az = THREE.MathUtils.degToRad(azimuth);
+      const el = THREE.MathUtils.degToRad(Math.max(elevation, 2)); // у самого горизонта тени бесконечные — держим чуть выше
+      sun.position.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(25).add(center);
+    },
+  };
 }

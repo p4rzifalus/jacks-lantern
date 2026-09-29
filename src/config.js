@@ -154,6 +154,53 @@ export const QUALITY = {
   ultra:  { tiltShift: true, msaa: 4, maxDpr: 2, shadowMap: 4096, ao: true, godRays: true, particles: 1.5, lanternShadows: 3, lanternLights: 7, textureSize: 1024, fogLayers: 4, fogWisps: 10 },
 };
 
+// Смена дня и ночи (идёт только во время игры; при каждом входе в игру — утро).
+// Части суток по кругу, длина — в минутах. speed — ускорение (2 — вдвое быстрее, удобно для проверки).
+export const DAY_CYCLE = {
+  phases: [
+    { id: 'morning', name: 'утро', minutes: 1.5 },
+    { id: 'day', name: 'день', minutes: 5 },
+    { id: 'evening', name: 'вечер', minutes: 2 },
+    { id: 'night', name: 'ночь', minutes: 3.5 },
+  ],
+  speed: 1,
+  sunPeak: 42,   // как высоко солнце в полдень (градусы): ниже — длиннее тени
+  moonPeak: 35,  // и луна в полночь
+};
+
+// Как выглядит каждая часть суток (в середине части; между ними — плавный переход).
+//   sky          — небо сверху вниз [место 0..1, цвет] (если в art/ есть картинка sky-<часть>.png — берётся она)
+//   skyLight     — цвет и сила рассеянного света неба
+//   sun          — цвет и сила солнца (ночью — луны)
+//   reflections  — насколько блестящее отражает небо
+//   lut          — цветокоррекция (см. render/luts.js)
+//   lamps        — фонари и окна: 0 — погашены, 1 — горят
+//   stars        — звёзды на небе: 0 — нет, 1 — все
+//   rays         — лучи света сквозь воздух (от солнца, ночью — от луны): 0 — нет, 1 — во всю силу
+//   moonlight    — лунное пятно над серединой огорода: 0 — нет, 1 — во всю силу
+export const DAYTIME = {
+  morning: {
+    sky: [[0, '#3d3f78'], [0.45, '#9a6f9e'], [0.75, '#e38f7c'], [1, '#f5a86a']],
+    skyLight: '#b098d0', skyLightIntensity: 1.25, sun: '#ff9a62', sunIntensity: 3.2,
+    reflections: 0.6, lut: 'morning', lamps: 0.25, stars: 0.15, rays: 0.5, moonlight: 0,
+  },
+  day: {
+    sky: [[0, '#7d6f93'], [0.45, '#c98a62'], [0.75, '#dd9154'], [1, '#e39e62']],
+    skyLight: '#c9a0a0', skyLightIntensity: 1.15, sun: '#ffb86e', sunIntensity: 4,
+    reflections: 0.8, lut: 'day', lamps: 0, stars: 0, rays: 0, moonlight: 0,
+  },
+  evening: {
+    sky: [[0, '#1e2236'], [0.5, '#3a3450'], [0.8, '#554457'], [1, '#735a5a']],
+    skyLight: '#6a78b8', skyLightIntensity: 1.2, sun: '#ff7a3a', sunIntensity: 3,
+    reflections: 0.6, lut: 'evening', lamps: 1, stars: 0.2, rays: 0, moonlight: 0,
+  },
+  night: {
+    sky: [[0, '#080a16'], [0.5, '#121633'], [0.8, '#1d1f3f'], [1, '#2a2742']],
+    skyLight: '#5564a0', skyLightIntensity: 0.95, sun: '#8ea4e6', sunIntensity: 1.2,
+    reflections: 0.35, lut: 'night', lamps: 1, stars: 1, rays: 0.45, moonlight: 1,
+  },
+};
+
 // Туман под островом и вокруг (остров парит над ним). Цвет туман берёт у неба — у горизонта.
 // Слоёв и клочьев — по уровню качества (QUALITY → fogLayers, fogWisps).
 export const FOG_SEA = {
@@ -168,24 +215,19 @@ export const FOG_SEA = {
   wispOpacity: 0.5, // клочья тумана у краёв острова: прозрачность
 };
 
-// Вечерний свет
+// Свет, общий для всех частей суток (цвета неба, солнца и прочее по времени — выше, в DAYTIME)
 export const LIGHTING = {
-  // Небо: градиент сверху вниз [место 0..1, цвет]
-  // приглушённый: без резких переходов, чтобы не спорил с освещённым островом.
-  // Если в art/ есть sky.png — вместо градиента фоном будет картинка (ТЗ в ART.md)
-  sky: [[0, '#1e2236'], [0.5, '#3a3450'], [0.8, '#554457'], [1, '#735a5a']],
-  environmentIntensity: 0.6,       // насколько блестящее отражает небо
   skyReflex: 0.5,                  // отсвет неба на краях предметов (0 — нет)
   bottomFade: 0.55,                // насколько низ острова растворяется в дымке (0 — нет, 1 — полностью)
-  // тёплый ореол за островом (в долях экрана): будто свет фонарей рассеивается в воздухе
+  // тёплый ореол за островом (в долях экрана): будто свет фонарей рассеивается в воздухе (гаснет вместе с фонарями)
   halo: { color: '#ffb070', strength: 0.22, x: 0.5, y: 0.5, radius: 0.45 },
-  fogColor: '#3a3450', fogNear: 42, fogFar: 110, // дымка вдали
-  skyLight: '#6a78b8', groundColor: '#3a2618', skyLightIntensity: 1.2, // рассеянный свет неба
-  sunColor: '#ff7a3a', sunIntensity: 3,
-  sunDirection: { azimuth: -70, elevation: 12 }, // откуда светит солнце (в градусах): низко — длинные тени
+  fogNear: 42, fogFar: 110,        // дымка вдали (цвет — от неба)
+  groundColor: '#3a2618',          // отсвет земли снизу
   shadowStrength: 0.55,            // густота теней от солнца: 1 — чёрные, 0 — нет
   lanternColor: '#ffb45a', lanternIntensity: 16, lanternDistance: 6, // фонари
   coneStrength: 0.035,              // яркость конусов света под фонарями (0 — нет)
+  rays: { count: 7, strength: 0.4, length: 10 }, // лучи света сквозь воздух (сила по времени суток — DAYTIME.rays)
+  moonPool: { color: '#a8bcff', intensity: 2.2, radius: 4.5 }, // лунное пятно над огородом (ночью)
 };
 
 // Где стоят фонари (координаты сцены)
@@ -220,15 +262,15 @@ export const FX = {
   bloomIntensity: 1.2,  // сила свечения
   bloomThreshold: 0.9,  // с какой яркости начинает светиться
   bloomRadius: 0.7,     // как широко расходится свечение
-  lut: 'evening',       // цветокоррекция: evening, autumn, sunset, dusk, neutral
+  lut: 'auto',          // цветокоррекция: auto — по времени суток; или одна на всё время: morning, day, evening, night, autumn, sunset, dusk, neutral
   lutStrength: 1,
   vignette: 0.5,        // затемнение по краям
   grain: 0.12,          // плёночное зерно
   aoIntensity: 2.5,     // затенения в углах: сила
   aoRadius: 1.2,        // и насколько далеко от угла
-  tiltFocus: 0.75,      // миниатюра: ширина резкой полосы по середине экрана
-  tiltFeather: 0.35,    // насколько плавно резкое переходит в размытое
-  tiltOffset: 0.05,     // сдвиг резкой полосы вверх/вниз
+  tiltFocus: 1.39,      // миниатюра: ширина резкой полосы по середине экрана
+  tiltFeather: 1,       // насколько плавно резкое переходит в размытое
+  tiltOffset: 0,        // сдвиг резкой полосы вверх/вниз
 };
 
 // Камера

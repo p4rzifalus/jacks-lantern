@@ -6,7 +6,7 @@ import {
   BloomEffect, TiltShiftEffect, KernelSize, ToneMappingEffect, ToneMappingMode, LUT3DEffect, VignetteEffect, NoiseEffect, BlendFunction,
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
-import { createLUTs } from './luts.js';
+import { createLUTs, createLUTBlend } from './luts.js';
 
 // settings — общий объект настроек (его меняет панель G)
 export function createPipeline(renderer, scene, camera, settings, quality) {
@@ -39,7 +39,10 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
   const bloom = new BloomEffect({ mipmapBlur: true, luminanceSmoothing: 0.2 });
   const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
   const luts = createLUTs();
-  const lut = new LUT3DEffect(luts[settings.lut] || luts.autumn);
+  const autoLut = createLUTBlend(); // «auto» — цветокоррекция по времени суток (её смешивает day-night.js)
+  autoLut.mix(luts.evening, luts.evening, 0);
+  const pickLut = () => (settings.lut === 'auto' ? autoLut.texture : luts[settings.lut] || luts.evening);
+  const lut = new LUT3DEffect(pickLut());
   const vignette = new VignetteEffect({ offset: 0.3 });
   const grain = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: false });
   composer.addPass(new EffectPass(camera, bloom, toneMapping, lut, vignette, grain));
@@ -49,7 +52,7 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
     bloom.intensity = settings.bloomIntensity;
     bloom.luminanceMaterial.threshold = settings.bloomThreshold;
     bloom.mipmapBlurPass.radius = settings.bloomRadius;
-    lut.lut = luts[settings.lut] || luts.autumn;
+    lut.lut = pickLut();
     lut.blendMode.opacity.value = settings.lutStrength;
     vignette.darkness = settings.vignette;
     grain.blendMode.opacity.value = settings.grain;
@@ -96,7 +99,12 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
 
   return {
     apply,
-    lutNames: Object.keys(luts),
+    lutNames: ['auto', ...Object.keys(luts)],
+    luts,
+    // Смешать цветокоррекцию суток: от таблицы a к таблице b (имена из luts.js)
+    mixDaytimeLut(a, b, t) {
+      autoLut.mix(luts[a] || luts.evening, luts[b] || luts.evening, t);
+    },
     get pixelRatio() {
       return pixelRatio;
     },
