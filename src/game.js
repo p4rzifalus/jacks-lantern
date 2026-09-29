@@ -194,6 +194,7 @@ export function createGame({ onHint, onEffect, onChange }) {
             name: p.name,
             unlocked: isUnlocked(type),
             seedPrice: p.seedPrice,
+            defense: p.defense,
             sellPrice: p.sellPrice,
             growSeconds: p.stageSeconds * 3,
             owned: seedCount(type),

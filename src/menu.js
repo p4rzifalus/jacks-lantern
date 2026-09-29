@@ -25,7 +25,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   backdrop.appendChild(card);
   document.body.appendChild(backdrop);
 
-  let screen = null; // 'start' | 'menu' | null
+  let screen = null; // 'start' | 'menu' | 'morning' | null
   let busy = false;  // идёт работа с файлом — повторные нажатия не нужны
 
   const setScreen = (name) => {
@@ -136,8 +136,14 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     </div>`;
   }
 
-  function render(name) {
-    if (name === 'start') {
+  function render(name, data) {
+    if (name === 'morning') {
+      // утро после ночи: что было
+      card.innerHTML = `
+        <div class="menu-title title">Ночь прошла</div>
+        <div class="menu-report">${data.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}</div>
+        <div class="menu-buttons"><button class="primary" data-act="close">Доброе утро</button></div>`;
+    } else if (name === 'start') {
       card.innerHTML = `
         <div class="menu-title title">Осенняя ферма</div>
         <div class="menu-subtitle">огород на летающем острове</div>
@@ -184,7 +190,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   });
   // клик мимо окна закрывает меню (но не стартовый экран)
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop && screen === 'menu') close();
+    if (e.target === backdrop && (screen === 'menu' || screen === 'morning')) close();
   });
   // звук переключили клавишами N / M — обновить кнопки
   engine.onChange(() => {
@@ -208,9 +214,13 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     get isOpen() { return !!screen; },
     get isStart() { return screen === 'start'; },
     showStart: () => render('start'),
+    // Утреннее окно с итогом ночи (rows — из morningReport)
+    showMorning(rows) {
+      if (!screen) render('morning', rows);
+    },
     open: () => render('menu'),
     close() {
-      if (screen === 'menu') close(); // стартовый экран закрывается только кнопками
+      if (screen === 'menu' || screen === 'morning') close(); // стартовый экран закрывается только кнопками
     },
     toggle() {
       if (screen === 'menu') close();

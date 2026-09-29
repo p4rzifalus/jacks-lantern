@@ -282,11 +282,13 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
           return `<div class="shop-row locked"><div class="shop-name"><span class="title">???</span></div><div class="shop-info">Откроется: ${row.condition}</div></div>`;
         }
         const info = `рост ${formatTime(row.growSeconds)} · урожай ${row.sellPrice} мон.`;
+        const d = row.defense;
+        const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${d.nights} ${d.nights === 1 ? 'ночь' : d.nights < 5 ? 'ночи' : 'ночей'}</div>`;
         if (row.seedPrice === 0) {
-          return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div><div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
+          return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
         }
         const buyButton = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} за ${row.seedPrice * n}</button>`;
-        return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div><div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
+        return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
       }).join('');
     },
 

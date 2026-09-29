@@ -37,20 +37,23 @@ function seedsOf(n) {
   return `${n} семян`;
 }
 
-// Итог ночи одной строкой: кого прогнали, что пропало, что отцвело
-export function describeMorning({ scared, lost, faded }) {
-  const parts = [];
-  if (scared) parts.push(`прогнано духов: ${scared}, огоньков +${scared}`);
+// Итог ночи для утреннего окна: строки [подпись, значение]; null — ночь прошла тихо, показывать нечего
+export function morningReport({ scared, lost, faded }) {
   const gone = Object.entries(lost.crops).filter(([, n]) => n > 0).map(([type, n]) => countOf(type, n));
   if (lost.coins) gone.push(coinsOf(lost.coins));
-  if (gone.length) parts.push(`унесли: ${gone.join(', ')}`);
-  for (const f of faded) parts.push(`${PLANTS[f.type].name.toLowerCase()} отцвёл${f.seeds ? ` (+${seedsOf(f.seeds)})` : ''}`);
-  return parts.length ? `Ночь прошла: ${parts.join('; ')}` : null;
+  if (!scared && !gone.length && !faded.length) return null;
+  const rows = [
+    ['Прогнано духов', String(scared)],
+    ['Огоньков', `+${scared}`],
+    ['Унесли', gone.length ? gone.join(', ') : 'ничего'],
+  ];
+  if (faded.length) rows.push(['Отцвели', faded.map((f) => `${PLANTS[f.type].name.toLowerCase()}${f.seeds ? ` (+${seedsOf(f.seeds)})` : ''}`).join(', ')]);
+  return rows;
 }
 
 // onSpawn(spirit) — пришёл дух: { id, kind, name, target } (target: { cell } | { basket: true } | null — просто бродит)
 // onStolen(spirit, loot) — дух что-то унёс: loot { crop } или { coins }
-// onMorning(summary) — ночь кончилась: { scared, lost, faded } (текст — describeMorning)
+// onMorning(summary) — ночь кончилась: { scared, lost, faded } (строки для окна — morningReport)
 export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
   let active = false;
   let schedule = [];   // когда придут духи (доля ночи 0..1)

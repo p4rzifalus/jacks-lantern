@@ -27,8 +27,9 @@ import { createSound } from './audio/index.js';
 import { createDaytime } from './daytime.js';
 import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
-import { createNight, describeMorning } from './night.js';
+import { createNight, morningReport } from './night.js';
 import { createEmbers } from './world/embers.js';
+import { createDefenseRings } from './world/defense-rings.js';
 import { createSpirits } from './world/spirits.js';
 
 const quality = detectQuality();
@@ -93,10 +94,12 @@ const night = createNight({
   onMorning(summary) {
     spirits.dawn();
     embers.dawn(); // несобранные огоньки сами летят в счётчик
-    const text = describeMorning(summary);
-    if (text) ui.hint(text, 7000); // утром — итог ночи
+    const rows = morningReport(summary);
+    if (rows) menu.showMorning(rows); // утром — окно с итогом ночи (если что-то было)
   },
 });
+// Круги защиты вокруг спелых растений ночью
+const defenseRings = createDefenseRings(scene, game.garden);
 // Огоньки от прогнанных духов: енот подбирает, проходя рядом
 const embers = createEmbers(scene, {
   onCollect(at) {
@@ -116,7 +119,10 @@ const spirits = createSpirits(scene, camera, landmarks.island, night, {
   // испугался: вспышка у растения, которое напугало, огонёк на месте духа; добыча вернулась
   onScared(spirit, at, from, returned) {
     sound.spiritScared();
-    if (from) effects.sparkle(cellToWorld(from.x, from.z));
+    if (from) {
+      effects.sparkle(cellToWorld(from.x, from.z));
+      defenseRings.flash(from);
+    }
     embers.add(at);
     if (returned) ui.hint(`${spirit.name} испугался и уронил ${returned.crop ? PLANTS[returned.crop].forms[0] : 'монеты'}`, 2800);
   },
@@ -351,6 +357,7 @@ renderer.setAnimationLoop((now) => {
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
   const { lamps, night: nightDepth } = dayNight.state;
+  defenseRings.update(dt, nightDepth);
   if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
     shownLamps = lamps;
     setLampLevel(lamps);
