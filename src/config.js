@@ -40,6 +40,11 @@ export const COLORS = {
   basket: '#c08a4a',
   basketInside: '#5a3a20',
   basketFill: '#f07a1a',
+  // Что енот держит в лапах
+  wateringCan: '#5f8f86',   // лейка
+  wateringCanDark: '#3f615b',
+  seedBag: '#c9a877',       // мешочек с семенами
+  seedBagTie: '#7a5a32',
   // Крот (второй скин)
   moleBody: '#4a3a36',
   moleSnout: '#e8a8a0',
@@ -127,6 +132,16 @@ export const PLANTS = {
     defense: { role: 'волна спор вокруг себя, 3×3', nights: 3, seeds: [1, 1] },
     attack: { type: 'spores', reach: 1, power: 2, every: 4 } },
 };
+
+// Корзинка для сбора (инструмент 3): сколько овощей помещается. Полную относят к большой корзине у дома.
+// Уровни по порядку: первый — с самого начала, дальше — улучшения в магазине.
+//   capacity — сколько помещается, price — цена улучшения в монетах
+export const HAND_BASKET = [
+  { capacity: 2 },
+  { capacity: 3, price: 20 },
+  { capacity: 4, price: 60 },
+  { capacity: 5, price: 150 },
+];
 
 // Скорость роста всех растений: 1 — обычная, 10 — в десять раз быстрее (удобно для проверки)
 export const GROWTH_SPEED = 1;

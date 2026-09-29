@@ -82,6 +82,8 @@
       .toolbar .pixel-icon { width: 36px; height: 36px; fill: currentColor; } /* 3 точки на пиксель значка */
       .toolbar .name { font-size: 17px; line-height: 1; }
       .toolbar .key { position: absolute; top: 4px; left: 7px; font-size: 10px; opacity: 0.55; }
+      .toolbar .count { position: absolute; top: 4px; right: 7px; font-size: 11px; color: var(--text); } /* «1/2» на корзинке */
+      .toolbar .count.full { color: var(--amber); }
 
       /* Ряд семян над панелью */
       .seed-row {
@@ -112,6 +114,7 @@
         color: var(--text-dim); background: none; border: 1px solid var(--edge); cursor: pointer;
       }
       .shop-close:hover { color: var(--text); }
+      .shop-section { padding: 12px 18px 0; font-size: 15px; color: var(--amber); opacity: 0.8; }
       .shop-row { padding: 14px 18px; border-bottom: 1px solid var(--edge); }
       .shop-row:last-child { border-bottom: none; }
       .shop-row.locked { opacity: 0.45; }

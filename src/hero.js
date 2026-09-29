@@ -1,9 +1,9 @@
 // Герой-огородник (енот или крот — скин): пиксельный спрайт с анимациями, ходит сам или по маршруту.
 import * as THREE from 'three';
 import { CELL_SIZE, HERO_SKIN, HERO_SPEED, HERO_TURN_SPEED, HERO_SCALE, HERO_REACH } from './config.js';
-import { Sprite } from './render/sprites.js';
+import { Sprite, PX } from './render/sprites.js';
 import { getSheets } from './world/sheets.js';
-import { HERO, PLANT_ORDER } from './art/sprite-art.js';
+import { HERO, PLANT_ORDER, TOOL_FRAMES, SEED_BAG_ROW } from './art/sprite-art.js';
 import { viewAngle } from './render/view-angle.js';
 
 const RADIUS = 0.3 * HERO_SCALE; // «толщина» героя для столкновений
@@ -19,10 +19,15 @@ function directionOf(heading) {
   return rel > 0 ? 'right' : 'left';
 }
 
-// Где урожай в лапах: перед героем, а если он смотрит от нас — за ним
+// Где предмет в лапах: перед героем, а если он смотрит от нас — за ним
 const HELD_OFFSET = {
   down: [0, 0.2, 0.03], left: [-0.22, 0.2, 0.03], right: [0.22, 0.2, 0.03], up: [0, 0.22, -0.03],
 };
+
+// Собранные овощи в корзинке: уменьшенные спрайты урожая, выглядывают над плетёным боком.
+// Места — в пикселях от низа-середины корзинки; третий и дальше — видно только первые три
+const CROP_SCALE = 0.55;
+const CROP_SPOTS = [[-3, 5.5], [3, 6], [0, 7.5]];
 
 // Поворот на кратчайший угол
 function turnTowards(current, target, maxStep) {
@@ -36,10 +41,24 @@ export class Hero {
     const sheets = getSheets();
     this.sprite = new Sprite(sheets.hero[skin]);
     this.skin = skin;
-    this.heldSprite = new Sprite(sheets.held);
     this.object = new THREE.Group();
     this.object.add(this.sprite.object);
-    this.sprite.object.add(this.heldSprite.mesh); // урожай — в той же «повёрнутой к камере» плоскости
+    // Что в лапах — в той же «повёрнутой к камере» плоскости, что и герой. Слои от дальнего к ближнему:
+    // инструмент (или зад корзинки) → собранные овощи → перед корзинки
+    this.hand = new THREE.Group();
+    this.sprite.object.add(this.hand);
+    this.toolSprite = new Sprite(sheets.tools, { faceCamera: false });
+    this.crops = CROP_SPOTS.map(([x, y], i) => {
+      const crop = new Sprite(sheets.held, { castShadow: false, faceCamera: false });
+      crop.mesh.scale.setScalar(CROP_SCALE);
+      crop.mesh.position.set(x * PX, y * PX, 0.004 + i * 0.001);
+      this.hand.add(crop.mesh);
+      return crop;
+    });
+    this.basketFront = new Sprite(sheets.tools, { faceCamera: false });
+    this.basketFront.setFrame(...TOOL_FRAMES.basketFront);
+    this.basketFront.mesh.position.z = 0.01;
+    this.hand.add(this.toolSprite.mesh, this.basketFront.mesh);
     this.object.scale.setScalar(HERO_SCALE);
     this.actTime = 0;         // сколько ещё показывать «действие»
     this.animTime = 0;
@@ -49,7 +68,6 @@ export class Hero {
     this.path = [];          // точки маршрута после клика
     this.faceTo = null;      // куда повернуться в конце маршрута
     this.onArrive = null;
-    this.held = null;        // что в лапах (например, 'carrot')
   }
 
   // Сменить облик: 'raccoon' или 'mole'. Кадры у всех скинов в одном порядке, поэтому меняем только картинку
@@ -63,11 +81,17 @@ export class Hero {
     this.sprite.mesh.customDistanceMaterial = sheet.distanceMaterial;
   }
 
-  // Взять урожай в лапы (или освободить лапы, если type = null)
-  setHeld(type) {
-    this.held = type;
-    this.heldSprite.mesh.visible = !!type;
-    if (type) this.heldSprite.setFrame(PLANT_ORDER.indexOf(type), 0);
+  // Что в лапах: выбранный инструмент. tool — 'seeds' | 'water' | 'basket', seed — какие семена в мешочке,
+  // carried — что лежит в корзинке для сбора (видно, только когда она в лапах)
+  setHeld({ tool, seed, carried }) {
+    const basket = tool === 'basket';
+    this.toolSprite.setFrame(...(TOOL_FRAMES[tool] || [Math.max(0, PLANT_ORDER.indexOf(seed)), SEED_BAG_ROW]));
+    this.basketFront.mesh.visible = basket;
+    this.crops.forEach((crop, i) => {
+      const type = basket ? carried[i] : null;
+      crop.mesh.visible = !!type;
+      if (type) crop.setFrame(PLANT_ORDER.indexOf(type), 0);
+    });
   }
 
   // Показать короткое движение «сажаю / поливаю / собираю»
@@ -122,15 +146,9 @@ export class Hero {
     this.heading = turnTowards(this.heading, this.targetHeading, HERO_TURN_SPEED * dt);
 
     // Какую анимацию показать и какой кадр
-    let anim = 'idle';
-    if (this.actTime > 0) {
-      anim = 'act';
-      this.actTime -= dt;
-    } else if (moving) {
-      anim = this.held ? 'carry' : 'walk';
-    } else if (this.held) {
-      anim = 'carry'; // стоит с урожаем — первый кадр «несёт»
-    }
+    // в лапах всегда инструмент: идёт — «несёт», стоит — первый кадр «несёт»
+    const anim = this.actTime > 0 ? 'act' : 'carry';
+    if (this.actTime > 0) this.actTime -= dt;
     if (anim !== this.anim) {
       this.anim = anim;
       this.animTime = 0;
@@ -142,10 +160,11 @@ export class Hero {
     const dir = directionOf(this.heading);
     this.sprite.setFrame(first + frame, HERO.dirs[dir]);
 
-    // урожай в лапах покачивается вместе с шагом
+    // предмет в лапах покачивается вместе с шагом
     const [hx, hy, hz] = HELD_OFFSET[dir];
     const bob = moving && frame % 3 === 0 ? -0.03 : 0;
-    this.heldSprite.mesh.position.set(hx, hy + bob, hz);
+    this.hand.position.set(hx, hy + bob, hz);
+    this.hand.scale.x = dir === 'left' ? -1 : 1; // рисунки смотрят вправо (носик лейки), влево — зеркалим
   }
 
   arrive() {

@@ -5,17 +5,12 @@
 // Набеги идут только во время игры: часы суток стоят, пока игра закрыта или открыто меню.
 import { SPIRITS, PLANTS, GARDEN_SIZE } from './config.js';
 import { countOf } from './game.js';
+import { plural } from './text.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
 // «1 монету», «3 монеты», «12 монет»
-export function coinsOf(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${n} монету`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} монеты`;
-  return `${n} монет`;
-}
+export const coinsOf = (n) => plural(n, ['монету', 'монеты', 'монет']);
 
 function pickKind() {
   const kinds = Object.entries(SPIRITS.kinds);
@@ -44,13 +39,7 @@ function reaches(attack, c, at) {
 const onField = (s) => s.at && s.at.z <= GARDEN_SIZE - 0.5 && !s.fled && s.courage > 0;
 
 // «1 семя», «2 семени», «5 семян»
-function seedsOf(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${n} семя`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} семени`;
-  return `${n} семян`;
-}
+const seedsOf = (n) => plural(n, ['семя', 'семени', 'семян']);
 
 // Итог ночи для утреннего окна: строки [подпись, значение]; null — ночь прошла тихо, показывать нечего
 export function morningReport({ scared, lost, faded }) {

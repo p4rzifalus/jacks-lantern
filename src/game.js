@@ -1,25 +1,19 @@
 // Правила игры: инструменты, семена, монеты, магазин, открытие новых семян.
 // Здесь нет графики — только состояние и действия. Картинка узнаёт о переменах через колбэки.
-import { PLANTS, BASKET_CELL } from './config.js';
+import { PLANTS, BASKET_CELL, HAND_BASKET } from './config.js';
 import { isInGarden } from './grid.js';
 import { GardenState, EMPTY, RIPE } from './garden.js';
+import { plural } from './text.js';
 
-export const TOOL_IDS = ['seeds', 'water', 'hands'];
+export const TOOL_IDS = ['seeds', 'water', 'basket'];
 const PLANT_TYPES = Object.keys(PLANTS);
 
 // «5 морковок», «3 тыквы», «1 гриб»
-export function countOf(type, n) {
-  const [one, few, many] = PLANTS[type].forms;
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${n} ${one}`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} ${few}`;
-  return `${n} ${many}`;
-}
+export const countOf = (type, n) => plural(n, PLANTS[type].forms);
 
 export const isBasket = (c) => c.x === BASKET_CELL.x && c.z === BASKET_CELL.z;
 
-// onHint(text, ms) — показать подсказку; onEffect(name, cell) — для красоты (брызги, искры);
+// onHint(text, ms) — показать подсказку; onEffect(name, cell, earned) — для красоты (брызги, искры; earned — выручка при продаже);
 // onChange() — что-то поменялось: обновить интерфейс и сохранить
 export function createGame({ onHint, onEffect, onChange }) {
   const garden = new GardenState();
@@ -29,7 +23,8 @@ export function createGame({ onHint, onEffect, onChange }) {
     coins: 0,
     seeds: {},      // запас семян: { radish: 3, ... } (морковь бесплатная, её не считаем)
     harvested: {},  // сколько чего отнесено в корзинку: { carrot: 7, ... }
-    held: null,     // что у героя в лапах
+    carried: [],    // что собрано в корзинку для сбора: ['carrot', 'radish']
+    basketLevel: 0, // сколько раз корзинку улучшили в магазине
     embers: 0,      // огоньки — от прогнанных ночью духов
     shopOpen: false,
   };
@@ -40,6 +35,10 @@ export function createGame({ onHint, onEffect, onChange }) {
     const unlock = PLANTS[type].unlock;
     return !unlock || (state.harvested[unlock.plant] || 0) >= unlock.count;
   };
+
+  // Сколько помещается в корзинку для сбора, и какое улучшение следующее (или null — больше нет)
+  const capacity = () => HAND_BASKET[state.basketLevel].capacity;
+  const nextUpgrade = () => HAND_BASKET[state.basketLevel + 1] || null;
 
   function changed() {
     if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) state.selectedSeed = 'carrot';
@@ -61,30 +60,33 @@ export function createGame({ onHint, onEffect, onChange }) {
       if (garden.isWatered(c)) return onHint('Уже полито — растёт');
       garden.water(c);
       onEffect('watered', c);
-    } else if (state.tool === 'hands') {
+    } else if (state.tool === 'basket') {
       if (stage === EMPTY) return onHint('Здесь пусто');
       if (stage !== RIPE) return onHint(garden.isWatered(c) ? 'Ещё растёт' : 'Сначала полей');
-      if (state.held) return onHint('Лапы заняты — отнеси урожай в корзинку');
-      state.held = garden.harvest(c);
+      if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине у дома');
+      state.carried.push(garden.harvest(c));
       onEffect('harvested', c);
     }
   }
 
-  // Корзинка превращает урожай в монеты
+  // Большая корзина у дома превращает урожай в монеты: всё из корзинки для сбора — разом
   function putInBasket() {
-    const type = state.held;
-    if (!type) return onHint('Лапы пусты — сначала собери урожай');
+    if (!state.carried.length) return onHint('Корзинка пуста — сначала собери урожай');
     const lockedBefore = PLANT_TYPES.filter((t) => !isUnlocked(t));
 
-    state.held = null;
-    state.coins += PLANTS[type].sellPrice;
-    state.harvested[type] = (state.harvested[type] || 0) + 1;
-    onEffect('sold', BASKET_CELL);
+    let earned = 0;
+    for (const type of state.carried) {
+      earned += PLANTS[type].sellPrice;
+      state.harvested[type] = (state.harvested[type] || 0) + 1;
+    }
+    state.carried = [];
+    state.coins += earned;
+    onEffect('sold', BASKET_CELL, earned);
 
     const opened = lockedBefore.filter(isUnlocked);
     if (opened.length) onEffect('unlocked', BASKET_CELL);
     if (opened.length) onHint(`Новые семена в магазине: ${opened.map((t) => PLANTS[t].name).join(', ')}!`, 3500);
-    else onHint(`+${PLANTS[type].sellPrice} мон.`);
+    else onHint(`+${earned} мон.`);
   }
 
   return {
@@ -110,11 +112,21 @@ export function createGame({ onHint, onEffect, onChange }) {
     },
     buySeeds(type, count) {
       const cost = PLANTS[type].seedPrice * count;
-      if (!isUnlocked(type) || state.coins < cost) return;
+      if (!isUnlocked(type) || state.coins < cost) return false;
       state.coins -= cost;
       state.seeds[type] = (state.seeds[type] || 0) + count;
       state.selectedSeed = type; // сразу готовы сажать купленное
       changed();
+      return true;
+    },
+    // Улучшить корзинку для сбора (магазин)
+    upgradeBasket() {
+      const next = nextUpgrade();
+      if (!next || state.coins < next.price) return false;
+      state.coins -= next.price;
+      state.basketLevel++;
+      changed();
+      return true;
     },
     addCoins(n) {
       state.coins += n;
@@ -182,6 +194,9 @@ export function createGame({ onHint, onEffect, onChange }) {
         coins: state.coins,
         embers: state.embers,
         shopOpen: state.shopOpen,
+        carried: state.carried,
+        capacity: capacity(),
+        basketUpgrade: nextUpgrade(),
         selectedSeed: state.selectedSeed,
         seedOptions: PLANT_TYPES
           .filter((type) => isUnlocked(type) && seedCount(type) > 0)
@@ -208,8 +223,8 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     // Для сохранения (позицию героя добавляет main.js)
     toSave() {
-      const { coins, embers, seeds, harvested, held, tool, selectedSeed } = state;
-      return { cells: garden.toSave(), coins, embers, seeds, harvested, held, tool, selectedSeed };
+      const { coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed } = state;
+      return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed };
     },
     load(saved) {
       garden.load(saved.cells || []);
@@ -217,9 +232,10 @@ export function createGame({ onHint, onEffect, onChange }) {
       state.embers = saved.embers || 0;
       state.seeds = saved.seeds || {};
       state.harvested = saved.harvested || {};
+      state.basketLevel = Math.min(saved.basketLevel || 0, HAND_BASKET.length - 1);
       if (TOOL_IDS.includes(saved.tool)) state.tool = saved.tool;
       if (PLANTS[saved.selectedSeed]) state.selectedSeed = saved.selectedSeed;
-      if (PLANTS[saved.held]) state.held = saved.held;
+      state.carried = (saved.carried || []).filter((t) => PLANTS[t]).slice(0, capacity());
     },
   };
 }

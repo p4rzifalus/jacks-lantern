@@ -1,7 +1,7 @@
 // Сохранение игры в браузере (localStorage). Без сервера.
 // Тот же набор данных пишется и в файл (см. save-file.js), поэтому формат — в одном месте.
 const KEY = 'ogorod2-save'; // своё имя: у первой версии на том же сайте — своё сохранение
-const VERSION = 2; // меняется, когда меняется формат сохранения
+const VERSION = 3; // меняется, когда меняется формат сохранения
 const GAME = 'osennyaya-ferma-2'; // метка в файле, чтобы не спутать с чужим
 
 // Полное сохранение: метка игры, версия формата, время сохранения и само состояние
@@ -26,6 +26,11 @@ function upgrade(data) {
     const count = data.basketCount || 0;
     data = { ...data, version: 2, coins: count * 2, harvested: { carrot: count } };
     delete data.basketCount;
+  }
+  if (data.version === 2) {
+    // Было: урожай в лапах по одному, инструмент «руки». Стало: корзинка для сбора.
+    data = { ...data, version: 3, tool: data.tool === 'hands' ? 'basket' : data.tool, carried: data.held ? [data.held] : [] };
+    delete data.held;
   }
   return data.version === VERSION ? data : null;
 }

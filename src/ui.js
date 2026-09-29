@@ -1,4 +1,5 @@
 // Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, подсказки.
+import { plural } from './text.js';
 
 // Пиксельные значки 12×12: «#» — закрашенный пиксель, «.» — пусто
 const PIXEL_ICONS = {
@@ -30,19 +31,19 @@ const PIXEL_ICONS = {
     '..######....',
     '............',
   ],
-  hands: [
-    '.....#......',
-    '...#.#.#....',
-    '...#.#.#.#..',
-    '...#.#.#.#..',
-    '...#.#.#.#..',
-    '...#######..',
-    '#..#######..',
-    '##.#######..',
-    '.#########..',
-    '..########..',
-    '...######...',
+  basket: [
+    '............',
     '....####....',
+    '...#....#...',
+    '..#......#..',
+    '.#........#.',
+    '############',
+    '############',
+    '.#.##.##.#..',
+    '.##########.',
+    '.#.##.##.##.',
+    '..########..',
+    '............',
   ],
   shop: [
     '............',
@@ -165,7 +166,7 @@ function pixelIcon(name) {
 export const TOOLS = [
   { id: 'seeds', name: 'Семена' },
   { id: 'water', name: 'Лейка' },
-  { id: 'hands', name: 'Руки' },
+  { id: 'basket', name: 'Корзинка' },
 ];
 
 function el(tag, className, html = '') {
@@ -182,13 +183,16 @@ function toolButton(key, icon, name) {
     <span class="name title">${name}</span>`);
 }
 
+// «2 места», «5 мест»
+const places = (n) => plural(n, ['место', 'места', 'мест']);
+
 // «1 мин», «1,5 мин», «45 с»
 function formatTime(seconds) {
   if (seconds < 60) return `${Math.round(seconds)} с`;
   return `${String(Math.round((seconds / 60) * 10) / 10).replace('.', ',')} мин`;
 }
 
-export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCloseUp, onRotate, onMenu }) {
+export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, onShopToggle, onCloseUp, onRotate, onMenu }) {
   // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка
   const menuBar = el('div', 'corner-bar');
   const menuButton = el('button', '', `${pixelIcon('menu')}<span class="key">Esc</span>`);
@@ -222,6 +226,9 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
     toolbar.appendChild(b);
     toolButtons[tool.id] = b;
   });
+  // на корзинке — сколько собрано и сколько помещается: «1/2»
+  const basketCount = el('span', 'count');
+  toolButtons.basket.appendChild(basketCount);
   const shopButton = toolButton(4, 'shop', 'Магазин');
   shopButton.addEventListener('click', () => onShopToggle());
   toolbar.appendChild(shopButton);
@@ -249,12 +256,14 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
 
   // Магазин
   const shop = el('div', 'shop-backdrop');
-  shop.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Магазин семян</span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="shop-list"></div></div>';
+  shop.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="shop-list"></div></div>';
   const shopList = shop.querySelector('.shop-list');
   shop.addEventListener('click', (e) => {
     if (e.target === shop || e.target.closest('.shop-close')) onShopToggle(false);
     const buy = e.target.closest('button[data-buy]');
     if (buy && !buy.disabled) onBuy(buy.dataset.buy, Number(buy.dataset.count));
+    const upgrade = e.target.closest('button[data-upgrade]');
+    if (upgrade && !upgrade.disabled) onUpgradeBasket();
   });
   document.body.appendChild(shop);
 
@@ -268,6 +277,8 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
       for (const [id, b] of Object.entries(toolButtons)) b.classList.toggle('selected', id === view.tool);
       shopButton.classList.toggle('selected', view.shopOpen);
       closeUpButton.classList.toggle('on', !!view.closeUp);
+      basketCount.textContent = `${view.carried.length}/${view.capacity}`;
+      basketCount.classList.toggle('full', view.carried.length >= view.capacity);
       closeUpButton.setAttribute('aria-pressed', String(!!view.closeUp));
       coinsBox.innerHTML = `Монеты: ${view.coins}${view.embers ? `<span class="embers">Огоньки: ${view.embers}</span>` : ''}`;
 
@@ -277,7 +288,12 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
         .join('');
 
       shop.classList.toggle('visible', view.shopOpen);
-      shopList.innerHTML = view.shop.map((row) => {
+      if (!view.shopOpen) return; // закрытый магазин не перерисовываем — соберётся заново при открытии
+      const up = view.basketUpgrade;
+      const upgradeRow = up
+        ? `<div class="shop-row"><div class="shop-name"><span class="title">Корзинка побольше</span><span class="owned">сейчас: ${places(view.capacity)}</span></div><div class="shop-info">станет ${places(up.capacity)} — больше урожая за один поход к дому</div><div class="shop-buy"><button data-upgrade ${view.coins < up.price ? 'disabled' : ''}>улучшить за ${up.price}</button></div></div>`
+        : `<div class="shop-row"><div class="shop-name"><span class="title">Корзинка</span><span class="owned">${places(view.capacity)}</span></div><div class="shop-info">самая большая — улучшать больше некуда</div></div>`;
+      shopList.innerHTML = '<div class="shop-section title">Улучшения</div>' + upgradeRow + '<div class="shop-section title">Семена</div>' + view.shop.map((row) => {
         if (!row.unlocked) {
           return `<div class="shop-row locked"><div class="shop-name"><span class="title">???</span></div><div class="shop-info">Откроется: ${row.condition}</div></div>`;
         }

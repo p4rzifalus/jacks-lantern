@@ -58,11 +58,11 @@ const game = createGame({
     if (!effectJustPlayed) sound.deny();
     ui.hint(text, ms);
   },
-  onEffect(name, cell) {
+  onEffect(name, cell, earned) {
     effectJustPlayed = true;
     queueMicrotask(() => { effectJustPlayed = false; });
     if (name === 'unlocked') return sound.unlocked();
-    sound[name](name === 'sold' ? PLANTS[hero.held]?.sellPrice : undefined); // урожай ещё в лапах — по нему считаем монетки
+    sound[name](earned); // при продаже: чем больше выручка, тем больше монеток звенит
     hero.playAction(); // герой наклоняется: сажает, поливает, собирает, кладёт в корзинку
     const at = cellToWorld(cell.x, cell.z);
     if (name === 'planted') effects.dirt(at);
@@ -178,9 +178,10 @@ const ui = createUI({
     game.selectSeed(type);
   },
   onBuy(type, count) {
-    const coins = game.state.coins;
-    game.buySeeds(type, count);
-    if (game.state.coins < coins) sound.buy();
+    if (game.buySeeds(type, count)) sound.buy();
+  },
+  onUpgradeBasket() {
+    if (game.upgradeBasket()) sound.buy();
   },
   onShopToggle: toggleShop,
   onCloseUp: toggleCloseUp,
@@ -208,7 +209,8 @@ refresh();
 
 // Обновить картинку и интерфейс по состоянию игры и сохранить — после любого изменения
 function refresh() {
-  if (hero.held !== game.state.held) hero.setHeld(game.state.held);
+  const { tool, selectedSeed, carried } = game.state;
+  hero.setHeld({ tool, seed: selectedSeed, carried });
   basket.userData.fill.visible = game.hasHarvest();
   ui.render({ ...game.view(), closeUp: cameraControl.isCloseUp });
   save();

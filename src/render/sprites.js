@@ -58,7 +58,8 @@ export function createSheet(name, draw, frameW, frameH, { glowStrength = 0.5 } =
 }
 
 export class Sprite {
-  constructor(sheet, { castShadow = true } = {}) {
+  // faceCamera: false — для спрайта внутри другого, уже повёрнутого к камере (предмет в лапах героя)
+  constructor(sheet, { castShadow = true, faceCamera = true } = {}) {
     this.sheet = sheet;
     const geometry = new THREE.PlaneGeometry(sheet.frameW * PX, sheet.frameH * PX);
     geometry.translate(0, (sheet.frameH * PX) / 2, 0); // низ картинки — на земле
@@ -67,7 +68,7 @@ export class Sprite {
     this.mesh.customDistanceMaterial = sheet.distanceMaterial;
     this.mesh.castShadow = castShadow;
     this.object = new THREE.Group(); // двигаем этот объект; внутри он всегда повёрнут к камере
-    registerSprite(this.object); // повёрнут к камере, поворачивается вместе с ней
+    if (faceCamera) registerSprite(this.object); // повёрнут к камере, поворачивается вместе с ней
     this.object.add(this.mesh);
     this.col = -1;
     this.row = -1;

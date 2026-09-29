@@ -1,4 +1,4 @@
-// Пиксельные спрайты, нарисованные кодом: герой (енот и крот), растения, урожай в лапах, трава и цветы.
+// Пиксельные спрайты, нарисованные кодом: герой (енот и крот), растения, урожай, инструменты в лапах, трава и цветы.
 // Любой лист можно заменить своим рисунком из Aseprite — порядок кадров описан в ART.md.
 import { COLORS, PLANTS } from '../config.js';
 import { PixelSheet } from './pixels.js';
@@ -393,7 +393,7 @@ export function drawFxSheet() {
   return sheet.finish();
 }
 
-// ---------- Урожай в лапах ----------
+// ---------- Урожай (в корзинке у енота и в лапах у духов) ----------
 // Кадр 16×16, колонки — растения в порядке PLANT_ORDER.
 export const HELD_FRAME = { frameW: 16, frameH: 16 };
 
@@ -408,6 +408,61 @@ const DRAW_HELD = {
 export function drawHeldSheet() {
   const sheet = new PixelSheet(HELD_FRAME.frameW * PLANT_ORDER.length, HELD_FRAME.frameH);
   PLANT_ORDER.forEach((type, col) => DRAW_HELD[type](sheet.frame(col, 0, 16, 16)));
+  return sheet.finish();
+}
+
+// ---------- Инструменты в лапах ----------
+// Кадр 16×16. Строка 0: лейка, корзинка сзади (ручка и тёмное нутро), корзинка спереди (плетёный бок).
+// Между задом и передом корзинки рисуются собранные овощи из листа урожая — так они «сидят» внутри.
+// Строка 1: мешочек с семенами, по колонке на растение (в порядке PLANT_ORDER) — метка цвета растения.
+export const TOOL_FRAME = { frameW: 16, frameH: 16, cols: Math.max(3, PLANT_ORDER.length) };
+export const TOOL_FRAMES = { water: [0, 0], basket: [1, 0], basketFront: [2, 0] }; // [колонка, строка]; water и basket — по инструменту
+export const SEED_BAG_ROW = 1;
+
+const SEED_LABEL = { carrot: C.carrot, radish: C.radish, pumpkin: C.pumpkin, sunflower: C.sunflowerPetals, mushroom: C.mushroomCap };
+
+function drawCan(d) {
+  d.line(4, 6, 9, 6, C.wateringCanDark);  // ручка сверху
+  d.px(3, 7, C.wateringCanDark);
+  d.px(10, 7, C.wateringCanDark);
+  d.rect(3, 8, 8, 6, C.wateringCan);      // бак
+  d.rect(3, 10, 8, 1, C.wateringCanDark); // обод
+  d.rect(4, 14, 6, 1, C.wateringCanDark); // донышко
+  d.line(11, 12, 14, 8, C.wateringCan);   // носик
+  d.line(11, 13, 14, 9, C.wateringCan);
+  d.rect(14, 6, 2, 3, C.wateringCanDark); // рассеиватель
+}
+
+function drawBasketBack(d) {
+  d.line(3, 8, 5, 3, C.basket);           // ручка дугой
+  d.line(5, 3, 10, 3, C.basket);
+  d.line(10, 3, 12, 8, C.basket);
+  d.ellipse(7.5, 8, 5.5, 1.5, C.basketInside);
+}
+
+function drawBasketFront(d) {
+  d.rect(2, 9, 12, 4, C.basket);
+  d.rect(3, 13, 10, 2, C.basket);
+  for (let x = 2; x < 14; x += 2) d.line(x, 9, x, 14, C.basketInside); // плетёнка
+  d.rect(2, 9, 12, 1, C.hat);             // светлый край
+}
+
+function drawSeedBag(d, label) {
+  d.ellipse(8, 11, 5, 4, C.seedBag);
+  d.rect(6, 5, 4, 3, C.seedBag);          // горлышко
+  d.px(5, 4, C.seedBag);                  // уголки над завязкой
+  d.px(10, 4, C.seedBag);
+  d.line(5, 7, 10, 7, C.seedBagTie);      // завязка
+  d.ellipse(8, 11, 2, 1.5, label);        // метка: что за семена
+}
+
+export function drawToolSheet() {
+  const { frameW, frameH, cols } = TOOL_FRAME;
+  const sheet = new PixelSheet(frameW * cols, frameH * 2);
+  drawCan(sheet.frame(...TOOL_FRAMES.water, frameW, frameH));
+  drawBasketBack(sheet.frame(...TOOL_FRAMES.basket, frameW, frameH));
+  drawBasketFront(sheet.frame(...TOOL_FRAMES.basketFront, frameW, frameH));
+  PLANT_ORDER.forEach((type, col) => drawSeedBag(sheet.frame(col, SEED_BAG_ROW, frameW, frameH), SEED_LABEL[type] || C.seed));
   return sheet.finish();
 }
 
