@@ -29,7 +29,7 @@ import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
 import { createNight, morningReport } from './night.js';
 import { createEmbers } from './world/embers.js';
-import { createDefenseRings } from './world/defense-rings.js';
+import { createAttacks } from './world/attacks.js';
 import { createSpirits } from './world/spirits.js';
 
 const quality = detectQuality();
@@ -93,6 +93,9 @@ const night = createNight({
     sound.spiritAppear();
   },
   onSpawn: (spirit) => spirits.add(spirit),
+  // растения бьют духов: как выглядит — world/attacks.js
+  onAttack: (event) => attacks.show(event),
+  onHit: (spirit) => attacks.hit(spirit),
   onStolen(spirit, loot) {
     ui.hint(night.describe(spirit, loot), 2800);
   },
@@ -103,8 +106,6 @@ const night = createNight({
     if (rows) menu.showMorning(rows); // утром — окно с итогом ночи (если что-то было)
   },
 });
-// Круги защиты вокруг спелых растений ночью
-const defenseRings = createDefenseRings(scene, game.garden);
 // Огоньки от прогнанных духов: енот подбирает, проходя рядом
 const embers = createEmbers(scene, {
   onCollect(at) {
@@ -123,14 +124,14 @@ const spirits = createSpirits(scene, camera, landmarks.island, night, {
   // испугался: вспышка у растения, которое напугало, огонёк на месте духа; добыча вернулась
   onScared(spirit, at, from, returned) {
     sound.spiritScared();
-    if (from) {
-      effects.sparkle(cellToWorld(from.x, from.z));
-      defenseRings.flash(from);
-    }
+    if (from) effects.sparkle(cellToWorld(from.x, from.z));
     embers.add(at);
     if (returned) ui.hint(`${spirit.name} испугался и уронил ${returned.crop ? PLANTS[returned.crop].forms[0] : 'монеты'}`, 2800);
   },
 });
+
+// Атаки растений (искры, лучи, споры) и вспышки попаданий
+const attacks = createAttacks(scene, (spirit) => spirits.positionOf(spirit));
 
 const hoverFrame = createHoverFrame();
 const frontMarker = createFrontMarker();
@@ -355,13 +356,13 @@ renderer.setAnimationLoop((now) => {
     daytime.update(dt);
     night.update(dt);
     spirits.update(dt, now / 1000);
+    attacks.update(dt);
     embers.update(dt, now / 1000, hero.position);
   }
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
   const { lamps, night: nightDepth } = dayNight.state;
-  defenseRings.update(dt, nightDepth);
   if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
     shownLamps = lamps;
     setLampLevel(lamps);
@@ -390,7 +391,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers, attacks,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

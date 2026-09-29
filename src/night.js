@@ -1,10 +1,10 @@
-// Ночь — только правила: когда и по какому ряду приходят духи, где останавливаются, что пропадает, кто их пугает,
-// что сказать утром. Ряд — столбец клеток x от дальнего края огорода (z = 7) к дому (z = 0).
+// Ночь — только правила: когда и по какому ряду приходят духи, где останавливаются, что пропадает,
+// какие растения по кому бьют и когда дух пугается, что сказать утром.
+// Ряд — столбец клеток x от дальнего края огорода (z = 7) к дому (z = 0); «вперёд» от растения — к туману (z больше).
 // Как духи выглядят и двигаются — world/spirits.js. Числа — config.js → SPIRITS.
 // Набеги идут только во время игры: часы суток стоят, пока игра закрыта или открыто меню.
-import { SPIRITS, PLANTS, CELL_SIZE, GARDEN_SIZE } from './config.js';
+import { SPIRITS, PLANTS, GARDEN_SIZE } from './config.js';
 import { countOf } from './game.js';
-import { cellToWorld } from './grid.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -25,6 +25,19 @@ function pickKind() {
     if (r <= 0) return id;
   }
   return kinds[0][0];
+}
+
+// Достаёт ли атака растения с клетки c до духа в точке at (в клетках, дробные числа)
+function reaches(attack, c, at) {
+  const dx = Math.abs(at.x - c.x);
+  const dz = at.z - c.z; // > 0 — дух впереди (со стороны тумана)
+  switch (attack.type) {
+    case 'whip': case 'spark': return dx <= 0.5 && dz >= -0.5 && dz <= attack.reach + 0.5;
+    case 'wall': return dx <= 0.5 && Math.abs(dz) <= 0.5;
+    case 'beam': return dx <= 1.5 && dz >= -0.5 && dz <= attack.reach + 0.5;
+    case 'spores': return dx <= attack.reach + 0.5 && Math.abs(dz) <= attack.reach + 0.5;
+    default: return false;
+  }
 }
 
 // «1 семя», «2 семени», «5 семян»
@@ -51,10 +64,13 @@ export function morningReport({ scared, lost, faded }) {
 }
 
 // onWarn(row) — скоро придёт дух по ряду row: в тумане проступает свечение
-// onSpawn(spirit) — пришёл дух: { id, kind, name, row, target: null } (target появляется, когда он что-то хватает)
+// onSpawn(spirit) — пришёл дух: { id, kind, name, row, courage, target: null } (target появляется, когда он что-то хватает).
+//   Где дух сейчас, сообщает картинка (world/spirits.js): spirit.at = { x, z } в клетках, или null — его не достать.
+// onAttack({ type, reach, from, targets, delay }) — растение с клетки from ударило; delay — через сколько секунд удар долетит
+// onHit(spirit, from) — удар попал, смелость убавилась (на нуле spirit.courage <= 0 — дух испугался, убегает картинка)
 // onStolen(spirit, loot) — дух что-то унёс: loot { crop } или { coins }
 // onMorning(summary) — ночь кончилась: { scared, lost, faded } (строки для окна — morningReport)
-export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMorning }) {
+export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, onStolen, onMorning }) {
   let active = false;
   let left = 0;        // сколько духов ещё придёт этой ночью
   let wait = 0;        // секунд до следующего предупреждения
@@ -63,10 +79,55 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
   let nextId = 1;
   let lost = { crops: {}, coins: 0 };
   let scared = 0;      // сколько духов прогнали за ночь
+  const ready = new Map(); // клетка «x,z» → сколько секунд растению до следующего удара
+  let flying = [];     // удары в пути (искры): { spirit, power, from, t }
 
   function reset() {
     lost = { crops: {}, coins: 0 };
     scared = 0;
+    ready.clear();
+    flying = [];
+  }
+
+  // Удар попал: убавить смелость
+  function hit(spirit, power, from) {
+    if (spirit.fled || spirit.courage <= 0) return;
+    spirit.courage -= power;
+    spirit.hitBy = from;
+    onHit?.(spirit, from);
+  }
+
+  // Каждое спелое растение, когда готово, бьёт духов, до которых достаёт
+  function attack(dt) {
+    for (const [key, t] of ready) ready.set(key, t - dt);
+    for (const f of [...flying]) {
+      f.t -= dt;
+      if (f.t > 0) continue;
+      flying.splice(flying.indexOf(f), 1);
+      hit(f.spirit, f.power, f.from);
+    }
+    // бьют только тех, кто уже ступил на огород (в тумане и на дальней дорожке их не достать)
+    const targets = spirits.filter((s) => s.at && s.at.z <= GARDEN_SIZE - 0.5 && !s.fled && s.courage > 0);
+    if (!targets.length) return;
+    for (const c of game.ripeCells()) {
+      const key = `${c.x},${c.z}`;
+      if ((ready.get(key) || 0) > 0) continue;
+      const a = PLANTS[game.garden.cell(c).plant].attack;
+      let victims = targets.filter((s) => reaches(a, c, s.at));
+      if (!victims.length) continue;
+      ready.set(key, a.every);
+      if (a.type === 'spark') {
+        // искра летит вперёд по ряду в ближайшего духа
+        const first = victims.reduce((best, s) => (s.at.z < best.at.z ? s : best));
+        victims = [first];
+        const delay = Math.max(0.05, Math.hypot(first.at.x - c.x, first.at.z - c.z) / a.speed);
+        flying.push({ spirit: first, power: a.power, from: c, t: delay });
+        onAttack?.({ type: a.type, reach: a.reach, from: c, targets: victims, delay });
+        continue;
+      }
+      onAttack?.({ type: a.type, reach: a.reach, from: c, targets: victims, delay: 0 });
+      for (const s of victims) hit(s, a.power, c);
+    }
   }
 
   function startNight() {
@@ -94,7 +155,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
 
   function spawn(row) {
     const kind = pickKind();
-    const spirit = { id: nextId++, kind, name: SPIRITS.kinds[kind].name, row, target: null, fear: 0, loot: null, fled: false };
+    const spirit = { id: nextId++, kind, name: SPIRITS.kinds[kind].name, row, courage: SPIRITS.kinds[kind].courage, at: null, hitBy: null, target: null, loot: null, fled: false };
     spirits.push(spirit);
     onSpawn(spirit);
   }
@@ -113,6 +174,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
           warned = null;
         }
       }
+      if (spirits.length) attack(dt);
       if (!active || !left) return;
       wait -= dt;
       if (wait <= 0 && !warned) {
@@ -131,6 +193,12 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
         if (!stop || c.z > stop.z) stop = c;
       }
       return stop;
+    },
+
+    // Сколько секунд дух тянет добычу: тыкву — дольше (PLANTS → defense → hold), остальное — обычное время
+    holdSeconds(target) {
+      const plant = target.cell && game.garden.cell(target.cell).plant;
+      return (plant && PLANTS[plant].defense.hold) || SPIRITS.grabSeconds;
     },
 
     // Спелое ли ещё растение, которое дух тянет (его могли собрать)
@@ -165,33 +233,12 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
       return loot;
     },
 
-    // Страх: спелые растения рядом нагоняют страх на духа (каждый кадр, pos — где дух сейчас).
-    // → { slow — во сколько раз медленнее (0…1), from — самое страшное растение рядом, scared — пора убегать }
-    scare(spirit, pos, dt) {
-      if (spirit.fled) return { slow: 0, from: null, scared: false };
-      let rate = 0;
-      let slow = 0;
-      let from = null;
-      let strongest = 0;
-      for (const c of game.ripeCells()) {
-        const d = PLANTS[game.garden.cell(c).plant].defense;
-        const at = cellToWorld(c.x, c.z);
-        const dist = Math.hypot(pos.x - at.x, pos.z - at.z) / CELL_SIZE;
-        if (dist > d.radius) continue;
-        const r = d.power * (1 - 0.5 * (dist / d.radius));
-        rate += r;
-        slow = Math.max(slow, d.slow);
-        if (r > strongest) { strongest = r; from = c; }
-      }
-      spirit.fear += rate * dt;
-      return { slow, from, scared: spirit.fear >= SPIRITS.kinds[spirit.kind].courage };
-    },
-
-    // Дух испугался и убегает: добычу роняет (она возвращается), оставляет огонёк.
+    // Дух испугался (смелость кончилась) и убегает: добычу роняет (она возвращается), оставляет огонёк.
     // → что вернулось: { crop } / { coins } / null
     flee(spirit) {
       if (spirit.fled) return null;
       spirit.fled = true;
+      spirit.at = null;
       scared++;
       const loot = spirit.loot;
       spirit.loot = null;
@@ -222,6 +269,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMornin
     // Только для проверки (панель G): позвать духа прямо сейчас (случайный ряд), даже днём
     spawnNow() {
       if (!active) reset();
+      if (warned) spawn(warned.row); // предыдущий вызванный ещё не поднялся — пусть поднимается сразу
       warn();
     },
   };

@@ -1,7 +1,7 @@
 // Духи — как выглядят и двигаются: у дальнего края огорода в тумане проступает свечение, из него поднимается дух
 // и медленно идёт по своему ряду к дому (скелет — пешком, остальные летят). У первого спелого растения
 // останавливается и тянет его; утащил — уходит с ним обратно в туман. Прошёл ряд — сворачивает к корзинке.
-// Рядом со спелыми растениями дух дрожит, а испугавшись — роняет добычу и быстро улетает. На рассвете тают.
+// От ударов растений дух вздрагивает и бледнеет, а испугавшись — роняет добычу и быстро улетает. На рассвете тают.
 // Что им можно и что пропадает, решают правила (night.js): здесь только движение.
 import * as THREE from 'three';
 import { SPIRITS, CELL_SIZE, BASKET_CELL, GARDEN_SIZE } from '../config.js';
@@ -86,6 +86,8 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
   function add(spirit) {
     const kind = spirit.kind;
     const sprite = new Sprite(sheets.spirits, { castShadow: kind !== 'wisp' }); // блуждающий огонь сам светится — без тени
+    sprite.mesh.material = sheets.spirits.material.clone(); // свой материал: бледнеет от ударов независимо от других
+    sprite.mesh.material.transparent = true;
     const loot = new Sprite(sheets.held, { castShadow: false });
     loot.mesh.visible = false;
     sprite.object.add(loot.mesh);
@@ -96,7 +98,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     list.push({
       spirit, kind, sprite, loot,
       state: 'rise', leg: 'row', // leg: 'row' — идёт по ряду, 'path' — по дорожке к корзинке
-      grabTarget: null, exit: [], t: 0,
+      grabTarget: null, exit: [], t: 0, courage: spirit.courage, flinch: 0, pale: 1,
       anim: 'move', animTime: 0, phase: rand(0, 10), flip: false, scale: 1,
     });
     hooks.onAppear?.(spirit);
@@ -182,23 +184,28 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       s.t += dt;
       const hover = HOVER[s.kind] + (s.kind === 'ghost' ? Math.sin(time * 2 + s.phase) * 0.08 : 0);
 
-      // страх: рядом со спелыми растениями дух замедляется и дрожит; испугался — убегает
-      let slow = 0;
-      if (s.state === 'go' || s.state === 'grab' || s.state === 'leave') {
-        const fear = night.scare(s.spirit, pos, dt);
-        slow = fear.slow;
-        if (fear.scared) {
-          const returned = night.flee(s.spirit);
-          s.loot.mesh.visible = false;
-          s.state = 'flee';
-          s.t = 0;
-          s.exit = [new THREE.Vector3(pos.x, 0, farZ)]; // прочь по прямой в туман за дальним краем
-          hooks.onScared?.(s.spirit, pos.clone().setY(0), fear.from, returned);
-        }
+      // где дух для правил: растения бьют только тех, кто идёт по огороду, тянет добычу или уходит
+      const reachable = s.state === 'go' || s.state === 'grab' || s.state === 'leave';
+      s.spirit.at = reachable && !s.spirit.fled ? { x: pos.x / CELL_SIZE + OFFSET, z: cellZ(pos) } : null;
+      // удар попал: вздрагивает
+      if (s.spirit.courage < s.courage) { s.courage = s.spirit.courage; s.flinch = 1; }
+      s.flinch = Math.max(0, s.flinch - dt * 4);
+      // смелость кончилась: испугался — роняет добычу, убегает
+      if (reachable && s.spirit.courage <= 0 && !s.spirit.fled) {
+        const returned = night.flee(s.spirit);
+        s.loot.mesh.visible = false;
+        s.state = 'flee';
+        s.t = 0;
+        s.exit = [new THREE.Vector3(pos.x, 0, farZ)]; // прочь по прямой в туман за дальним краем
+        hooks.onScared?.(s.spirit, pos.clone().setY(0), s.spirit.hitBy, returned);
       }
-      const speed = SPIRITS.kinds[s.kind].speed * (1 - slow);
-      const courage = SPIRITS.kinds[s.kind].courage;
-      const shake = s.state === 'flee' || s.spirit.fear > courage * 0.5 ? Math.sin(time * 40 + s.phase) * 0.03 : 0;
+      const speed = SPIRITS.kinds[s.kind].speed;
+      // чем меньше смелости, тем бледнее и сильнее дрожит
+      const bold = Math.max(0, s.spirit.courage) / SPIRITS.kinds[s.kind].courage;
+      const tremble = s.state === 'flee' ? 1 : 1 - bold;
+      const shake = Math.sin(time * 40 + s.phase) * (0.035 * tremble + 0.06 * s.flinch);
+      const pale = s.state === 'flee' || s.state === 'sink' ? 0.5 : 0.45 + 0.55 * bold;
+      s.pale += (pale - s.pale) * Math.min(1, dt * 6);
 
       if (s.state === 'rise') {
         // поднимается из тумана, потом идёт по ряду
@@ -206,14 +213,14 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
         pos.y = DEPTH + (hover - DEPTH) * (1 - (1 - k) ** 3);
         if (k >= 1) { s.state = 'go'; s.t = 0; }
       } else if (s.state === 'go') {
-        pos.y = hover;
-        walk(s, dt, speed);
+        pos.y = hover + s.flinch * 0.08;
+        walk(s, dt, speed * (1 - 0.8 * s.flinch)); // от удара на миг сбивается с шага
       } else if (s.state === 'grab') {
         pos.y = hover;
         const target = s.grabTarget;
         if (target.cell && !night.isRipe(target.cell)) {
           s.state = 'go'; // растение успели собрать — идёт дальше
-        } else if (s.t >= SPIRITS.grabSeconds) {
+        } else if (s.t >= night.holdSeconds(target)) {
           const loot = night.grab(s.spirit, target);
           if (loot) {
             showLoot(s, loot);
@@ -250,10 +257,15 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       s.sprite.setFrame(first + (Math.floor(s.animTime * FPS[anim] + s.phase) % count), SPIRIT.rows_[s.kind]);
       s.sprite.mesh.scale.set(s.flip ? -s.scale : s.scale, s.scale, 1);
       s.sprite.mesh.position.x = shake + sway; // дрожит от страха
+      const m = s.sprite.mesh.material;
+      m.opacity = s.pale;
+      m.alphaTest = 0.5 * s.pale; // иначе полупрозрачный дух целиком отсекается
     }
   }
 
   function remove(s) {
+    s.spirit.at = null;
+    s.sprite.mesh.material.dispose();
     scene.remove(s.sprite.object);
     unregisterSprite(s.sprite.object);
     unregisterSprite(s.loot.object);
@@ -264,6 +276,11 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
   return {
     warn,
     add,
+    // Где дух сейчас (для эффектов атак); null — его уже нет
+    positionOf(spirit) {
+      const s = list.find((x) => x.spirit === spirit);
+      return s ? s.sprite.object.position : null;
+    },
     update,
     get count() { return list.length; },
     // Рассвет: все духи тают и опускаются в туман (с добычей — она уже не вернётся)
