@@ -98,7 +98,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     list.push({
       spirit, kind, sprite, loot,
       state: 'rise', leg: 'row', // leg: 'row' — идёт по ряду, 'path' — по дорожке к корзинке
-      grabTarget: null, exit: [], t: 0, courage: spirit.courage, flinch: 0, pale: 1,
+      grabTarget: null, exit: [], t: 0, courage: spirit.courage, flinch: 0, pale: 1, push: 0,
       anim: 'move', animTime: 0, phase: rand(0, 10), flip: false, scale: 1,
     });
     hooks.onAppear?.(spirit);
@@ -207,6 +207,13 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       const pale = s.state === 'flee' || s.state === 'sink' ? 0.5 : 0.45 + 0.55 * bold;
       s.pale += (pale - s.pale) * Math.min(1, dt * 6);
 
+      // толчок тыквы: отлетает назад, к туману (если тянул добычу — выпускает её и снова идёт к ней)
+      if (s.push > 0) {
+        const step = Math.min(s.push, dt * 4);
+        pos.z += step * CELL_SIZE;
+        s.push -= step;
+      }
+
       if (s.state === 'rise') {
         // поднимается из тумана, потом идёт по ряду
         const k = Math.min(1, s.t / RISE);
@@ -259,6 +266,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       s.sprite.mesh.position.x = shake + sway; // дрожит от страха
       const m = s.sprite.mesh.material;
       m.opacity = s.pale;
+      m.color.setScalar(1 + 1.5 * s.flinch); // от удара на миг белеет
       m.alphaTest = 0.5 * s.pale; // иначе полупрозрачный дух целиком отсекается
     }
   }
@@ -276,7 +284,14 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
   return {
     warn,
     add,
-    // Где дух сейчас (для эффектов атак); null — его уже нет
+    // Толчок: отлетает на cells клеток назад, к туману
+    knock(spirit, cells) {
+      const s = list.find((x) => x.spirit === spirit);
+      if (!s || !['go', 'grab', 'leave'].includes(s.state)) return;
+      s.push = cells;
+      if (s.state === 'grab') { s.state = 'go'; s.t = 0; }
+    },
+        // Где дух сейчас (для эффектов атак); null — его уже нет
     positionOf(spirit) {
       const s = list.find((x) => x.spirit === spirit);
       return s ? s.sprite.object.position : null;

@@ -40,6 +40,9 @@ function reaches(attack, c, at) {
   }
 }
 
+// Дух на огороде и ещё не испугался — растения могут его достать (в тумане и на дальней дорожке — нет)
+const onField = (s) => s.at && s.at.z <= GARDEN_SIZE - 0.5 && !s.fled && s.courage > 0;
+
 // «1 семя», «2 семени», «5 семян»
 function seedsOf(n) {
   const mod10 = n % 10;
@@ -106,8 +109,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
       flying.splice(flying.indexOf(f), 1);
       hit(f.spirit, f.power, f.from);
     }
-    // бьют только тех, кто уже ступил на огород (в тумане и на дальней дорожке их не достать)
-    const targets = spirits.filter((s) => s.at && s.at.z <= GARDEN_SIZE - 0.5 && !s.fled && s.courage > 0);
+    const targets = spirits.filter(onField);
     if (!targets.length) return;
     for (const c of game.ripeCells()) {
       const key = `${c.x},${c.z}`;
@@ -162,6 +164,8 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
 
   return {
     get active() { return active; },
+    // Ходит ли по огороду дух, которого можно достать (растения настораживаются)
+    get threat() { return spirits.some(onField); },
 
     update(dt) {
       const phase = daytime.phase();

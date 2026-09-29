@@ -212,9 +212,10 @@ export function drawHeroSheet(skin) {
 }
 
 // ---------- Растения ----------
-// Кадр 32×40, земля — нижняя строка. Колонки: стадия 0 семечко, 1 росток, 2 куст, 3 спелое.
+// Кадр 32×40, земля — нижняя строка. Колонки: стадии 0 семечко, 1 росток, 2 куст, 3 спелое;
+// дальше — спелое растение ночью: 4–5 настороже (по улице ходит дух), 6 замах, 7 удар.
 // Строки — растения в порядке PLANT_ORDER (морковь, редис, тыква, подсолнух, гриб).
-export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 4 };
+export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 8, alert: [4, 2], windup: 6, strike: 7 };
 
 // Маленькая кучка земли у основания растения
 function mound(d) {
@@ -229,73 +230,166 @@ function sprout(d) {
   d.ellipse(18, 30, 2, 1, C.leaves);
 }
 
+const FIRE = '#ffd27a';    // вспышка редиса, свет изнутри тыквы
+const EMBER = '#ff8a4a';   // тлеющий редис
+
+// pose: 'rest' — просто растёт; ночью у спелого: 'alert' (i — кадр 0/1), 'windup' — замах, 'strike' — удар
 const DRAW_PLANT = {
-  carrot(d, stage) {
-    const top = stage === 3 ? 17 : 23;
-    for (const [x, y] of [[9, top + 3], [12, top], [16, top - 1], [20, top], [23, top + 3]]) {
+  carrot(d, stage, pose = 'rest', i = 0) {
+    let top = stage === 3 ? 17 : 23;
+    let shift = 0;   // куда клонится ботва
+    let spread = 1;  // насколько раскрыта
+    if (pose === 'alert') { top = 15; shift = i ? 1 : -1; }
+    if (pose === 'windup') { top = 20; shift = -5; spread = 0.6; }
+    if (pose === 'strike') { top = 17; shift = 6; spread = 1.15; }
+    for (const [dx, dy] of [[-7, 3], [-4, 0], [0, -1], [4, 0], [7, 3]]) {
+      const x = Math.round(16 + dx * spread + shift);
+      const y = top + dy;
       d.line(16, 34, x, y, C.leaves);
       d.ellipse(x, y, 1.5, 1.5, C.leaves);
     }
+    if (pose === 'strike') { // одна ботвинка вытянулась хлыстом
+      d.line(16, 33, 23, 26, C.leaves);
+      d.line(23, 26, 28, 23, C.leaves);
+      d.ellipse(28, 23, 1.5, 1, C.leaves);
+    }
     if (stage === 3) d.ellipse(16, 35, 4, 2, C.carrot); // оранжевые «плечики» морковки
   },
-  radish(d, stage) {
-    const y = stage === 3 ? 25 : 29;
-    d.line(16, 34, 13, y, C.leaves);
-    d.line(16, 34, 19, y, C.leaves);
-    d.ellipse(13, y, 3, 4, C.leaves);
-    d.ellipse(19, y, 3, 4, C.leaves);
-    if (stage === 3) {
-      d.ellipse(16, 33, 5, 4, C.radish);
-      d.px(16, 37, '#f4e8e8');
+  radish(d, stage, pose = 'rest', i = 0) {
+    let y = stage === 3 ? 25 : 29;
+    let [lx, rx] = [13, 19];
+    let body = [16, 33, 5, 4];
+    if (pose === 'alert') y = 24;
+    if (pose === 'windup') { y = 27; [lx, rx] = [14, 18]; body = [16, 34, 6, 3]; }
+    if (pose === 'strike') { y = 23; [lx, rx] = [11, 21]; body = [16, 32, 4.5, 4.5]; }
+    d.line(16, 34, lx, y, C.leaves);
+    d.line(16, 34, rx, y, C.leaves);
+    d.ellipse(lx, y, 3, 4, C.leaves);
+    d.ellipse(rx, y, 3, 4, C.leaves);
+    if (stage !== 3) return;
+    d.ellipse(...body, C.radish);
+    d.px(16, 37, '#f4e8e8');
+    if (pose === 'alert' || pose === 'windup') d.ellipse(16, body[1], 1.5 + i, 1.5, EMBER, true); // тлеет изнутри
+    if (pose === 'strike') { // вспышка на верхушке: вылетает искра
+      d.ellipse(16, 32, 2.5, 2.5, EMBER, true);
+      d.ellipse(16, 17, 2, 2, FIRE, true);
+      for (const [dx, dy] of [[0, -4], [0, 4], [-4, 0], [4, 0], [-3, -3], [3, -3]]) d.line(16, 17, 16 + dx, 17 + dy, EMBER, true);
     }
   },
-  pumpkin(d, stage) {
+  pumpkin(d, stage, pose = 'rest', i = 0) {
     d.ellipse(10, 32, 4, 2.5, C.leaves);
     d.ellipse(22, 31, 4, 2.5, C.leaves);
     d.ellipse(16, 29, 3, 2, C.leaves);
-    if (stage === 3) {
-      d.ellipse(16, 31, 10, 6, C.pumpkin);
-      for (const x of [11, 16, 21]) d.line(x, 27, x, 36, '#c86a14'); // рёбра тыквы
-      d.rect(15, 23, 2, 3, C.stem);
+    if (stage !== 3) return;
+    // [центр по высоте, полуширина, полувысота]: присела перед толчком, вытянулась при толчке
+    const [cy, rx, ry] = pose === 'windup' ? [32, 11, 5] : pose === 'strike' ? [29, 9, 7] : [31, 10, 6];
+    d.ellipse(16, cy, rx, ry, C.pumpkin);
+    for (const x of [16 - rx / 2, 16, 16 + rx / 2]) d.line(x, cy - ry + 1, x, cy + ry - 1, '#c86a14'); // рёбра тыквы
+    d.rect(15, cy - ry - 2, 2, 3, C.stem);
+    if (pose === 'rest') return;
+    // ночью внутри загорается свет, как у фонаря: глаза и улыбка
+    const light = pose === 'alert' && i ? '#ffb040' : FIRE;
+    const ey = cy - 2;
+    for (const ex of [11, 19]) {
+      d.rect(ex, ey, 3, 2, light, true);
+      d.px(ex + (ex < 16 ? 2 : 0), ey - 1, light, true); // «бровки» домиком
     }
+    const my = cy + 2;
+    d.rect(12, my, 9, 1, light, true);
+    for (const x of [13, 16, 19]) d.px(x, my + 1, light, true);
   },
-  sunflower(d, stage) {
+  sunflower(d, stage, pose = 'rest', i = 0) {
     const top = stage === 3 ? 12 : 16;
     d.line(16, 36, 16, top, C.leaves);
     d.ellipse(13, 27, 3, 1.5, C.leaves);
     d.ellipse(19, 22, 3, 1.5, C.leaves);
-    if (stage === 3) {
-      d.ellipse(16, 9, 7, 7, C.sunflowerPetals);
-      d.ellipse(16, 9, 3.5, 3.5, C.sunflowerCenter);
-      d.px(15, 8, '#6a4020');
-      d.px(17, 10, '#6a4020');
-    } else {
-      d.ellipse(16, 15, 2, 2, C.leaves); // бутон
+    if (stage !== 3) { d.ellipse(16, 15, 2, 2, C.leaves); return; } // бутон
+    if (pose === 'alert') { // повернул голову, всматривается
+      const y = 9 + i;
+      d.ellipse(17, y, 5, 7, C.sunflowerPetals);
+      d.ellipse(19, y, 2, 3.5, C.sunflowerCenter);
+      d.px(19, y - 1, '#6a4020');
+      return;
     }
+    if (pose === 'windup') { // голова чуть откинута, лепестки сжаты
+      d.ellipse(15, 10, 6, 6, C.sunflowerPetals);
+      d.ellipse(15, 10, 3, 3, C.sunflowerCenter);
+      return;
+    }
+    if (pose === 'strike') { // раскрылся во всю ширину, серединка вспыхнула
+      d.ellipse(16, 9, 8, 8, C.sunflowerPetals, true);
+      for (const [dx, dy] of [[-9, 0], [9, 0], [0, -9], [-7, -7], [7, -7], [-7, 6], [7, 6]]) d.px(16 + dx, 9 + dy, C.sunflowerPetals, true);
+      d.ellipse(16, 9, 4, 4, '#fff0a0', true);
+      return;
+    }
+    d.ellipse(16, 9, 7, 7, C.sunflowerPetals);
+    d.ellipse(16, 9, 3.5, 3.5, C.sunflowerCenter);
+    d.px(15, 8, '#6a4020');
+    d.px(17, 10, '#6a4020');
   },
-  mushroom(d, stage) {
+  mushroom(d, stage, pose = 'rest', i = 0) {
     const glow = true;
     if (stage === 1) { d.ellipse(16, 34, 2, 1.5, C.mushroomCap, glow); return; }
-    const [sx, sw, sy, sh, cy, rx, ry] = stage === 2 ? [15, 2, 31, 4, 30, 4, 2.5] : [14, 4, 28, 8, 26, 9, 5];
-    d.ellipse(16, cy, rx, ry, C.mushroomCap, glow);
+    // [стебель x, ширина, верх, высота, шляпка y, полуширина, полувысота]
+    let shape = stage === 2 ? [15, 2, 31, 4, 30, 4, 2.5] : [14, 4, 28, 8, 26, 9, 5];
+    if (pose === 'windup') shape = [14, 4, 31, 5, 29, 10, 4];   // присел
+    if (pose === 'strike') shape = [14, 4, 27, 9, 25, 9, 5];    // выпрямился, выпустил споры
+    const [sx, sw, sy, sh, cy, rx, ry] = shape;
+    d.ellipse(16, cy, rx, ry, pose === 'alert' && i ? '#a8f4ff' : C.mushroomCap, glow);
     for (let y = cy + 1; y <= cy + ry + 1; y++) for (let x = 16 - rx - 1; x <= 16 + rx + 1; x++) d.px(x, y, null); // низ шляпки срезан
     d.rect(sx, sy, sw, sh, C.mushroomStem);
-    if (stage === 3) for (const [x, y] of [[12, 24], [17, 23], [20, 25]]) d.px(x, y, '#d8fbff', glow); // пятнышки
+    if (stage !== 3) return;
+    const spots = pose === 'alert'
+      ? [[12, cy - 2], [17, cy - 3], [20, cy - 1], [i ? 9 : 14, cy - 1], [i ? 22 : 15, cy - 4]]
+      : [[12, cy - 2], [17, cy - 3], [20, cy - 1]];
+    for (const [x, y] of spots) d.px(x, y, '#d8fbff', glow); // пятнышки
+    if (pose === 'strike') for (const [x, y] of [[10, 17], [16, 14], [22, 17], [13, 12], [19, 11], [8, 13], [24, 12]]) d.px(x, y, '#b8f8ff', glow);
   },
 };
 
 export function drawPlantSheet() {
   const { frameW, frameH, cols } = PLANT_FRAME;
   const sheet = new PixelSheet(frameW * cols, frameH * PLANT_ORDER.length);
+  // что в какой колонке: [стадия, поза, кадр]
+  const columns = [[0], [1], [2], [3], [3, 'alert', 0], [3, 'alert', 1], [3, 'windup'], [3, 'strike']];
   PLANT_ORDER.forEach((type, row) => {
-    for (let stage = 0; stage < cols; stage++) {
-      const d = sheet.frame(stage, row, frameW, frameH);
+    columns.forEach(([stage, pose, i], col) => {
+      const d = sheet.frame(col, row, frameW, frameH);
       mound(d);
       if (stage === 0) { d.px(14, 35, C.seed); d.px(17, 36, C.seed); }
       else if (stage === 1 && type !== 'mushroom') sprout(d);
-      else DRAW_PLANT[type](d, stage);
-    }
+      else DRAW_PLANT[type](d, stage, pose, i);
+    });
   });
+  return sheet.finish();
+}
+
+// ---------- Эффекты боя ----------
+// Кадр 16×16, 4 колонки. Строки: 0 — искра редиса (летит, мерцает), 1 — вспышка попадания (звёздочка раскрывается и гаснет).
+export const FX = { frameW: 16, frameH: 16, cols: 4, rows_: { spark: 0, star: 1 } };
+
+export function drawFxSheet() {
+  const sheet = new PixelSheet(FX.frameW * FX.cols, FX.frameH * 2);
+  for (let i = 0; i < 4; i++) {
+    const d = sheet.frame(i, FX.rows_.spark, 16, 16);
+    const r = [3, 3.5, 3, 2.5][i];
+    d.ellipse(8, 8, r + 1, r + 1, EMBER, true);
+    d.ellipse(8, 8, r - 0.5, r - 0.5, FIRE, true);
+    d.px(8, 8, '#fff6d8', true);
+    const [dx, dy] = [[5, -2], [-2, -5], [-5, 2], [2, 5]][i]; // искорка отлетает то в одну, то в другую сторону
+    d.px(8 + dx, 8 + dy, FIRE, true);
+  }
+  for (let i = 0; i < 4; i++) {
+    const d = sheet.frame(i, FX.rows_.star, 16, 16);
+    const len = [2, 5, 7, 7][i];
+    const c = i < 3 ? '#f4fbff' : '#a8d8ff';
+    if (i < 3) d.ellipse(8, 8, [2, 1.5, 1][i], [2, 1.5, 1][i], c, true);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const from = i === 3 ? 4 : 1; // последний кадр — лучики оторвались от центра
+      d.line(8 + dx * from, 8 + dy * from, 8 + dx * len, 8 + dy * len, c, true);
+    }
+    if (i >= 1) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) d.px(8 + dx * (i + 1), 8 + dy * (i + 1), c, true);
+  }
   return sheet.finish();
 }
 

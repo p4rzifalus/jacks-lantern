@@ -83,6 +83,10 @@ hero.heading = hero.targetHeading = Math.PI; // смотрит на огород
 scene.add(hero.object);
 
 // ---------- Ночь: духи ----------
+const ATTACK_SOUNDS = {
+  whip: () => sound.plantWhip(), spark: () => sound.plantSpark(), wall: () => sound.plantThump(),
+  beam: () => sound.plantBeam(), spores: () => sound.plantSpores(),
+};
 // Правила (кто, когда, что уносит) — night.js; как выглядят и летают — world/spirits.js
 const night = createNight({
   game,
@@ -94,8 +98,16 @@ const night = createNight({
   },
   onSpawn: (spirit) => spirits.add(spirit),
   // растения бьют духов: как выглядит — world/attacks.js
-  onAttack: (event) => attacks.show(event),
-  onHit: (spirit) => attacks.hit(spirit),
+  onAttack(event) {
+    attacks.show(event);
+    gardenView.strike(event.from); // растение замахивается и бьёт
+    if (event.type === 'wall') for (const s of event.targets) spirits.knock(s, 0.5); // тыква отталкивает на полклетки
+    ATTACK_SOUNDS[event.type]?.();
+  },
+  onHit(spirit) {
+    attacks.hit(spirit);
+    sound.spiritHit();
+  },
   onStolen(spirit, loot) {
     ui.hint(night.describe(spirit, loot), 2800);
   },
@@ -349,7 +361,7 @@ renderer.setAnimationLoop((now) => {
 
   hero.update(dt, input.getMoveDir(), world);
   cameraControl.update(dt, now / 1000, hero.position);
-  gardenView.update();
+  gardenView.update(Date.now(), dt, night.threat); // ночью, пока по огороду ходит дух, спелые растения настороже
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
   if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
@@ -391,7 +403,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers, attacks,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers, attacks, gardenView,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

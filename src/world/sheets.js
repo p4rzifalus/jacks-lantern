@@ -1,8 +1,8 @@
 // Все листы спрайтов игры — создаются один раз и используются всеми спрайтами.
 import { createSheet } from '../render/sprites.js';
 import {
-  drawHeroSheet, drawPlantSheet, drawHeldSheet, drawDecorSheet, drawSmokeSheet, drawSpiritSheet,
-  HERO, HERO_SKINS, PLANT_FRAME, HELD_FRAME, DECOR_FRAME, SMOKE_FRAME, SPIRIT,
+  drawHeroSheet, drawPlantSheet, drawHeldSheet, drawDecorSheet, drawSmokeSheet, drawSpiritSheet, drawFxSheet,
+  HERO, HERO_SKINS, PLANT_FRAME, HELD_FRAME, DECOR_FRAME, SMOKE_FRAME, SPIRIT, FX,
 } from '../art/sprite-art.js';
 
 let sheets = null;
@@ -17,6 +17,7 @@ export function getSheets() {
       decor: createSheet('decor', drawDecorSheet, DECOR_FRAME.frameW, DECOR_FRAME.frameH),
       smoke: createSheet('smoke', drawSmokeSheet, SMOKE_FRAME.frameW, SMOKE_FRAME.frameH),
       spirits: createSheet('spirits', drawSpiritSheet, SPIRIT.frameW, SPIRIT.frameH, { glowStrength: 0.3 }), // духи ночью светятся
+      fx: createSheet('fx', drawFxSheet, FX.frameW, FX.frameH, { glowStrength: 0.8 }), // искры и вспышки боя
     };
   }
   return sheets;

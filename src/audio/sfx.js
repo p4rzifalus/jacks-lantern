@@ -102,6 +102,55 @@ export function createSfx(engine) {
       noise(engine, FX, { when: now(), type: 'bandpass', freq: 1800, freqEnd: 600, q: 1.2, gain: 0.05, attack: 0.1, decay: 0.5, reverb: 0.5, pan: rand(-0.5, 0.5) });
     },
 
+    // ---------- Бой ночью: растения бьют духов (всё тихое, чтобы ночь оставалась уютной) ----------
+
+    // Морковь хлещет ботвой: свист-шорох и лёгкий шлепок
+    plantWhip() {
+      if (!ready()) return;
+      const t = now();
+      noise(engine, FX, { when: t, type: 'bandpass', freq: 900, freqEnd: 3200, q: 1.5, gain: 0.07, attack: 0.03, decay: 0.12, pan: rand(-0.3, 0.3) });
+      noise(engine, FX, { when: t + 0.15, type: 'highpass', freq: 2500, gain: 0.05, decay: 0.04 });
+    },
+
+    // Редис выпускает искру: трескучий «пшик» вверх
+    plantSpark() {
+      if (!ready()) return;
+      const t = now();
+      for (let i = 0; i < 4; i++) noise(engine, FX, { when: t + i * rand(0.02, 0.04), type: 'highpass', freq: rand(3000, 5000), gain: 0.035, decay: 0.02 });
+      tone(engine, FX, { when: t, freq: 500, freqEnd: 1600, glide: 0.12, type: 'triangle', gain: 0.03, decay: 0.14, filter: 2400, reverb: 0.3 });
+    },
+
+    // Тыква толкает: глухое «бум»
+    plantThump() {
+      if (!ready()) return;
+      const t = now();
+      tone(engine, FX, { when: t, freq: 110, freqEnd: 50, glide: 0.15, gain: 0.22, decay: 0.22 });
+      noise(engine, FX, { when: t, color: 'brown', type: 'lowpass', freq: 500, gain: 0.2, decay: 0.12 });
+    },
+
+    // Подсолнух светит: мягкий звон с эхом
+    plantBeam() {
+      if (!ready()) return;
+      const t = now();
+      [79, 86, 91].forEach((n, i) => tone(engine, FX, { when: t + i * 0.04, freq: noteHz(n), type: 'triangle', gain: 0.03, attack: 0.02, decay: 0.7, reverb: 0.8 }));
+    },
+
+    // Гриб пускает споры: «пуф» и шелест
+    plantSpores() {
+      if (!ready()) return;
+      const t = now();
+      noise(engine, FX, { when: t, color: 'brown', type: 'lowpass', freq: 900, gain: 0.18, attack: 0.02, decay: 0.3 });
+      noise(engine, FX, { when: t + 0.05, type: 'highpass', freq: 6000, gain: 0.025, attack: 0.1, decay: 0.5, reverb: 0.5 });
+    },
+
+    // Удар попал в духа: короткий звяк
+    spiritHit() {
+      if (!ready()) return;
+      const t = now();
+      const f = rand(1300, 1600);
+      tone(engine, FX, { when: t, freq: f, freqEnd: f * 0.7, glide: 0.08, type: 'triangle', gain: 0.04, decay: 0.12, reverb: 0.3 });
+    },
+
     // Открылись новые семена: короткое радостное арпеджио
     unlocked() {
       if (!ready()) return;
