@@ -21,7 +21,8 @@ export function createSound() {
 
     // Каждый кадр: шаги по пройденному пути, ветер и дождь по погоде
     // onSoil — стоит ли герой на грядке (там шаги мягче)
-    update(dt, { heroPosition, onSoil, windStrength, rain }) {
+    // dark — темнота (0 — день, 1 — вечер и ночь), night — глубокая ночь 0..1
+    update(dt, { heroPosition, onSoil, windStrength, rain, dark = 1, night = 0 }) {
       if (lastPos) {
         const d = Math.hypot(heroPosition.x - lastPos.x, heroPosition.z - lastPos.z);
         walked = d > 0.0005 ? walked + d : SOUND.stepEvery * 0.6; // встал — следующий шаг наступит скоро
@@ -31,7 +32,13 @@ export function createSound() {
         }
       }
       lastPos = { x: heroPosition.x, z: heroPosition.z };
-      ambience.update(dt, { windStrength: DECOR.wind ? windStrength / DECOR.wind : 0, rain });
+      ambience.update(dt, { windStrength: DECOR.wind ? windStrength / DECOR.wind : 0, rain, dark, night });
+      // ночью музыка тише и медленнее
+      const mood = 1 - SOUND.nightMusic * night;
+      if (Math.abs(mood - engine.mood) > 0.02) {
+        engine.mood = mood;
+        engine.applyVolumes();
+      }
     },
   };
 }

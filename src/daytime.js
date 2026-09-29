@@ -35,6 +35,21 @@ export function createDaytime() {
       return { id: p.id, name: p.name, progress: (time - p.start) / p.seconds };
     },
 
+    // Значение, которое держится ровно всю часть суток и меняется только у её границ (за edge секунд):
+    // value(id) — значение для части суток. Для того, что не должно «ползти» весь день (лучи).
+    steady(value, edge = 10) {
+      const i = phases.findIndex((ph) => time >= ph.start && time < ph.start + ph.seconds);
+      const p = phases[Math.max(0, i)];
+      const prev = phases[(Math.max(0, i) + phases.length - 1) % phases.length];
+      const next = phases[(Math.max(0, i) + 1) % phases.length];
+      const into = time - p.start;
+      const left = p.start + p.seconds - time;
+      const s = (x) => x * x * (3 - 2 * x);
+      if (into < edge) return value(prev.id) + (value(p.id) - value(prev.id)) * s(0.5 + into / (2 * edge));
+      if (left < edge) return value(p.id) + (value(next.id) - value(p.id)) * s(0.5 - left / (2 * edge));
+      return value(p.id);
+    },
+
     // Солнце идёт по небу от начала утра до конца вечера, луна — всю ночь.
     // u — сколько пути прошло (0 — восход, 1 — заход), или null, если светило за горизонтом
     sunPath() {

@@ -14,7 +14,7 @@ export class GardenView {
     // Земля: сухая; мокрая — темнее и блестит; спелая — светлее, чтобы было видно, что пора собирать
     this.soil = {
       dry: getMaterial('soil'),
-      wet: getMaterial('soil', { tint: '#8a8078', roughness: 0.3 }),
+      wet: getMaterial('soil', { tint: '#5c5048', roughness: 0.5 }), // политая: заметно темнее и лишь чуть влажно блестит (сильный блеск днём отражает небо и светлеет)
       ripe: getMaterial('soil', { tint: '#f0d4a8' }),
     };
     this.cells = [];

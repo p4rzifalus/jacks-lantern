@@ -52,6 +52,7 @@ export function createAudioEngine() {
     ctx: null,
     noise: null,
     volumes,
+    mood: 1, // ночное настроение музыки: 1 — как днём, меньше — тише и медленнее
     dry: {},  // входы дорожек без эха
     wet: {},  // входы дорожек через эхо
 
@@ -83,7 +84,7 @@ export function createAudioEngine() {
         master: volumes.master,
         effects: switches.effects ? volumes.effects * switches.effectsLevel : 0,
         ambience: switches.effects ? volumes.ambience * switches.effectsLevel : 0,
-        music: switches.music ? volumes.music * switches.musicLevel : 0,
+        music: switches.music ? volumes.music * switches.musicLevel * engine.mood : 0,
       };
       for (const [name, value] of Object.entries(target)) {
         engine.gains[name].gain.setTargetAtTime(value, ctx.currentTime, 0.12);

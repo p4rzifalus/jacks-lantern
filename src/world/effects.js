@@ -82,8 +82,9 @@ export function createEffects(scene, quality, lanternLights) {
       }
     },
 
-    // ripeMushrooms — точки спелых грибов; night — насколько видно (дождь гасит пылинки и споры)
-    update(dt, { ripeMushrooms = [], visibility = 1 } = {}) {
+    // ripeMushrooms — точки спелых грибов; visibility — насколько видно (дождь гасит пылинки и споры);
+    // lamps — горят ли фонари (днём пылинок в их свете нет)
+    update(dt, { ripeMushrooms = [], visibility = 1, lamps = 1 } = {}) {
       // споры поднимаются над спелыми грибами
       sporeTimer -= dt;
       if (ripeMushrooms.length && sporeTimer <= 0 && visibility > 0.3) {
@@ -97,7 +98,7 @@ export function createEffects(scene, quality, lanternLights) {
       }
       // пылинки медленно кружат в свете фонарей
       dustTimer -= dt;
-      if (lanternLights.length && dustTimer <= 0 && visibility > 0.3) {
+      if (lanternLights.length && dustTimer <= 0 && visibility > 0.3 && lamps > 0.3) {
         dustTimer = 0.25 / k;
         const at = lanternLights[Math.floor(Math.random() * lanternLights.length)];
         dust.spawn({
@@ -112,7 +113,7 @@ export function createEffects(scene, quality, lanternLights) {
       dirt.update(dt, (p, t) => 1 - t * 0.5);
       sparks.update(dt, (p, t) => Math.sin(Math.PI * Math.min(1, t * 1.3)));
       coins.update(dt, (p, t) => (t > 0.8 ? (1 - t) * 5 : 1));
-      dust.update(dt, (p, t) => Math.sin(Math.PI * t) * visibility);
+      dust.update(dt, (p, t) => Math.sin(Math.PI * t) * visibility * lamps);
       spores.update(dt, (p, t) => Math.sin(Math.PI * t) * (0.8 + 0.2 * Math.sin(p.age * 8)));
     },
   };

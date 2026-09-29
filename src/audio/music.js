@@ -40,7 +40,7 @@ export function createMusic(engine) {
   let melodyNote = 2; // где сейчас мелодия (номер в MELODY)
   let wasPlaying = false;
 
-  const eighth = () => 30 / engine.volumes.tempo;
+  const eighth = () => 30 / (engine.volumes.tempo * (0.85 + 0.15 * engine.mood)); // ночью чуть медленнее
 
   // Подушка аккорда: несколько слегка расстроенных голосов, медленно проступают и тают
   function pad(chord, when, length) {

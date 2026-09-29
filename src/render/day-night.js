@@ -106,7 +106,9 @@ export function createDayNight({ renderer, scene, lighting, pipeline, weather, d
     // фонари загораются к вечеру и гаснут утром; звёзды — ночью
     state.lamps = mix('lamps');
     state.stars = mix('stars');
-    state.rays = mix('rays') * (1 - rain);
+    // лучи держат силу всю часть суток (не разгораются вместе с солнцем), меняются только у границ;
+    // ночью (от луны) — слабее: во столько, во сколько луна слабее солнца
+    state.rays = daytime.steady((id) => DAYTIME[id].rays * Math.min(1, DAYTIME[id].sunIntensity / 2)) * (1 - rain);
     state.moonlight = mix('moonlight') * (1 - 0.7 * rain);
     state.night = from === 'night' ? 1 - t : to === 'night' ? t : 0;
 

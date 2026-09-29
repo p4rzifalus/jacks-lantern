@@ -20,6 +20,8 @@ export class PixelSheet {
     const ox = col * frameW;
     const oy = row * frameH;
     const sheet = this;
+    sheet.frameW = frameW; // размер кадра — чтобы светотень и контур не переходили в соседний кадр
+    sheet.frameH = frameH;
     const put = (x, y, color, glow) => {
       x = Math.round(x);
       y = Math.round(y);
@@ -53,14 +55,19 @@ export class PixelSheet {
   // Светотень: свет сверху-слева — верхние края светлее, нижние темнее; потом контур снаружи
   finish() {
     const { width: w, height: h } = this;
-    const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? null : this.color[y * w + x]);
+    const fw = this.frameW || w;
+    const fh = this.frameH || h;
+    // соседний пиксель — только внутри того же кадра (иначе контур из кадра сверху ложится полоской на кадр снизу)
+    const sameFrame = (x, y, nx, ny) => Math.floor(x / fw) === Math.floor(nx / fw) && Math.floor(y / fh) === Math.floor(ny / fh);
+    const inside = (x, y, nx, ny) => nx >= 0 && ny >= 0 && nx < w && ny < h && sameFrame(x, y, nx, ny);
+    const at = (x, y, nx, ny) => (inside(x, y, nx, ny) ? this.color[ny * w + nx] : null);
     const shaded = this.color.map((c, i) => {
       if (!c) return null;
       const x = i % w;
       const y = Math.floor(i / w);
       const same = (o) => o && o[0] === c[0] && o[1] === c[1] && o[2] === c[2];
-      if (!same(at(x, y - 1)) || !same(at(x - 1, y))) return shade(c, 1.18); // край, на который падает свет
-      if (!same(at(x, y + 1)) || !same(at(x + 1, y))) return shade(c, 0.78); // край в тени
+      if (!same(at(x, y, x, y - 1)) || !same(at(x, y, x - 1, y))) return shade(c, 1.18); // край, на который падает свет
+      if (!same(at(x, y, x, y + 1)) || !same(at(x, y, x + 1, y))) return shade(c, 0.78); // край в тени
       return c;
     });
     // Контур: прозрачный пиксель рядом с рисунком становится тёмным оттенком соседа
@@ -69,7 +76,7 @@ export class PixelSheet {
       for (let x = 0; x < w; x++) {
         if (shaded[y * w + x]) continue;
         const n = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-          .map(([dx, dy]) => (x + dx >= 0 && y + dy >= 0 && x + dx < w && y + dy < h ? this.color[(y + dy) * w + x + dx] : null))
+          .map(([dx, dy]) => at(x, y, x + dx, y + dy))
           .find(Boolean);
         if (n) outlined[y * w + x] = shade(n, 0.3);
       }

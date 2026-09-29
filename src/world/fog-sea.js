@@ -188,8 +188,10 @@ export function createFogSea(scene, quality, islandBounds) {
   return {
     settings,
     apply,
-    update(dt) {
+    // lamps — горят ли фонари: их тёплый отсвет на тумане днём гаснет
+    update(dt, lamps = 1) {
       time.value += dt;
+      shared.uWarmGlow.value = settings.warmGlow * lamps;
       // клочья — светлее горизонта, как освещённый край облака
       const light = new THREE.Color(1, 0.95, 0.9);
       for (const m of wispMaterials) m.color.copy(skyUniforms.uFadeColor.value).lerp(light, 0.35 * settings.brightness);

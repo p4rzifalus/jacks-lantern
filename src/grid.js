@@ -28,16 +28,23 @@ export function isWalkable(c) {
   return inArea && !isBasket;
 }
 
-// Кратчайший путь от клетки start до любой соседней с target клетки.
+// Кратчайший путь от клетки start до любой соседней с target клетки (например, к корзинке — на неё не встать).
 // Возвращает список клеток (последняя — где встать) или null.
 export function findPathToNeighbor(start, target) {
+  const goals = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dz]) => ({ x: target.x + dx, z: target.z + dz }))
+    .filter(isWalkable);
+  return searchPath(start, goals);
+}
+
+// Кратчайший путь от клетки start до самой клетки target (встать на неё). Возвращает список клеток или null.
+export function findPathTo(start, target) {
+  return isWalkable(target) ? searchPath(start, [target]) : null;
+}
+
+function searchPath(start, goalCells) {
   const key = (c) => `${c.x},${c.z}`;
-  const goals = new Set(
-    [[1, 0], [-1, 0], [0, 1], [0, -1]]
-      .map(([dx, dz]) => ({ x: target.x + dx, z: target.z + dz }))
-      .filter(isWalkable)
-      .map(key),
-  );
+  const goals = new Set(goalCells.map(key));
 
   const cameFrom = new Map([[key(start), null]]);
   const queue = [start];

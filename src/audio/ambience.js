@@ -1,4 +1,5 @@
-// Фон природы: ветер (порывы в такт с травой), шелест листвы, сверчки, изредка сова; в дождь — шум и капли.
+// Фон природы: ветер (порывы в такт с травой), шелест листвы; утром и днём — птицы,
+// вечером и ночью — сверчки, ночью изредка сова; в дождь — шум и капли.
 import { SOUND } from '../config.js';
 import { tone, noise, noiseLoop, rand } from './synth.js';
 
@@ -31,6 +32,30 @@ function chirp(engine, c, when) {
   osc.stop(when + pulses * 0.032 + 0.02);
 }
 
+// Птица: сидит где-то слева или справа, у каждой свой голос — высота и манера (посвист, трель, щебет)
+function makeBird() {
+  return { freq: rand(2300, 4200), pan: rand(-0.8, 0.8), gain: rand(0.015, 0.03), style: Math.floor(rand(0, 3)), next: rand(1, 6) };
+}
+
+// Одна фраза птицы: несколько коротких нот, каждая чуть «съезжает» по высоте
+function birdPhrase(engine, b, when) {
+  const notes = b.style === 1 ? Math.floor(rand(5, 9)) : Math.floor(rand(2, 5));
+  let t = when;
+  for (let i = 0; i < notes; i++) {
+    const f = b.freq * rand(0.9, 1.12);
+    if (b.style === 0) { // посвист: плавно вверх
+      tone(engine, BUS, { when: t, freq: f * 0.8, freqEnd: f * 1.15, glide: 0.12, gain: b.gain, attack: 0.02, hold: 0.06, decay: 0.08, pan: b.pan, reverb: 0.4 });
+      t += rand(0.18, 0.3);
+    } else if (b.style === 1) { // трель: быстрые одинаковые ноты
+      tone(engine, BUS, { when: t, freq: f, freqEnd: f * 0.92, glide: 0.04, gain: b.gain * 0.8, attack: 0.004, decay: 0.04, pan: b.pan, reverb: 0.3 });
+      t += 0.06;
+    } else { // щебет: коротко вниз
+      tone(engine, BUS, { when: t, freq: f * 1.25, freqEnd: f * 0.85, glide: 0.07, gain: b.gain, attack: 0.005, decay: 0.07, pan: b.pan, reverb: 0.35 });
+      t += rand(0.1, 0.2);
+    }
+  }
+}
+
 // Сова вдалеке: «у-у… у-у-у»
 function owl(engine) {
   const t = engine.ctx.currentTime;
@@ -46,6 +71,7 @@ export function createAmbience(engine) {
   let started = false;
   let wind, rustle, rain, rainLow;
   const crickets = [];
+  const birds = Array.from({ length: 3 }, makeBird);
   let owlTimer = rand(...SOUND.owlEveryMinutes) * 60;
 
   function startLoops() {
@@ -58,9 +84,10 @@ export function createAmbience(engine) {
     for (let i = 0; i < count; i++) crickets.push(makeCricket());
   }
 
-  // windStrength — сила ветра (как гнётся трава), 0..~1.2; rain — сила дождя 0..1
+  // windStrength — сила ветра (как гнётся трава), 0..~1.2; rain — сила дождя 0..1;
+  // dark — темнота (0 — день, 1 — вечер и ночь), night — глубокая ночь 0..1
   return {
-    update(dt, { windStrength, rain: rainAmount }) {
+    update(dt, { windStrength, rain: rainAmount, dark = 1, night = 0 }) {
       const ctx = engine.ctx;
       if (!ctx || ctx.state !== 'running' || !engine.isOn('effects')) return; // звуки выключены — не тратим силы
       if (!started) startLoops();
@@ -85,8 +112,17 @@ export function createAmbience(engine) {
         drops--;
       }
 
-      // Сверчки: в дождь прячутся
-      if (rainAmount < 0.5) {
+      // Птицы поют утром и днём, в дождь прячутся; чем светлее — тем чаще
+      const song = (1 - dark) * (1 - rainAmount);
+      for (const b of birds) {
+        if (b.next < t) {
+          if (song > 0.2) birdPhrase(engine, b, t + rand(0, 0.2));
+          b.next = t + rand(3, 9) / Math.max(song, 0.2);
+        }
+      }
+
+      // Сверчки: только в темноте, в дождь прячутся
+      if (rainAmount < 0.5 && dark > 0.5) {
         for (const c of crickets) {
           if (c.next < t) c.next = t + rand(0, 2); // после паузы вкладки — не догоняем пропущенное
           while (c.next < t + AHEAD) {
@@ -106,7 +142,7 @@ export function createAmbience(engine) {
       owlTimer -= dt;
       if (owlTimer <= 0) {
         owlTimer = rand(...SOUND.owlEveryMinutes) * 60;
-        if (rainAmount < 0.3) owl(engine);
+        if (rainAmount < 0.3 && night > 0.5) owl(engine); // только глубокой ночью
       }
     },
   };

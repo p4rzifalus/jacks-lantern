@@ -1,7 +1,7 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
 import { HERO_START, BASKET_CELL, PLANTS } from './config.js';
-import { cellToWorld, worldToCell, isInGarden, findPathToNeighbor } from './grid.js';
+import { cellToWorld, worldToCell, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
 import { RIPE } from './garden.js';
 import { createScene, createHoverFrame, createFrontMarker } from './scene.js';
@@ -26,6 +26,7 @@ import { createMenu } from './menu.js';
 import { createSound } from './audio/index.js';
 import { createDaytime } from './daytime.js';
 import { createDayNight } from './render/day-night.js';
+import { setLampLevel } from './render/glow.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -199,23 +200,27 @@ window.addEventListener('pagehide', save);
 setInterval(save, 5000);
 
 // ---------- Управление ----------
-// Клетка перед носом героя
-function frontCell() {
-  const c = worldToCell(hero.frontPoint);
-  return isInGarden(c) || isBasket(c) ? c : null;
+// Клетка, с которой работает герой: грядка под ним; корзинка — если стоит к ней лицом (на неё не встать)
+function actionCell() {
+  const front = worldToCell(hero.frontPoint);
+  if (isBasket(front)) return front;
+  const c = worldToCell(hero.position);
+  return isInGarden(c) ? c : null;
 }
 
 const input = createInput(renderer.domElement, camera, {
-  // Клик по клетке: идём к ней, встаём рядом лицом к ней и действуем
+  // Клик по клетке: идём на неё и действуем. К корзинке — встаём рядом лицом к ней.
   onCellClick(c) {
-    const path = findPathToNeighbor(worldToCell(hero.position), c);
+    const toBasket = isBasket(c);
+    const from = worldToCell(hero.position);
+    const path = toBasket ? findPathToNeighbor(from, c) : findPathTo(from, c);
     if (!path) return;
     const points = path.map((p) => cellToWorld(p.x, p.z));
     if (points.length > 1) points.shift(); // первая точка — клетка, где герой уже стоит
-    hero.walkPath(points, cellToWorld(c.x, c.z), () => game.useTool(c));
+    hero.walkPath(points, toBasket ? cellToWorld(c.x, c.z) : null, () => game.useTool(c));
   },
   onAction() {
-    const c = frontCell();
+    const c = actionCell();
     if (c) game.useTool(c);
   },
   onPan(dx, dy) {
@@ -274,6 +279,7 @@ let frameCount = 0;
 
 let last = performance.now();
 let daytimeFrame = 0;
+let shownLamps = -1;
 ui.setDaytime(daytime.phase());
 renderer.setAnimationLoop((now) => {
   if (++frameCount % 60 === 0) applySkyReflex(scene);
@@ -289,20 +295,27 @@ renderer.setAnimationLoop((now) => {
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
-  decor.fireflyVisibility = 1 - weather.wetness; // в дождь светлячки прячутся
-  effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness });
+  const { lamps, night } = dayNight.state;
+  if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
+    shownLamps = lamps;
+    setLampLevel(lamps);
+  }
+  decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
+  effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);
-  fogSea.update(dt);
+  fogSea.update(dt, lamps);
   sound.update(dt, {
     heroPosition: hero.position,
     onSoil: isInGarden(worldToCell(hero.position)),
     windStrength: decor.windStrength,
     rain: weather.intensity,
+    dark: lamps, // вечер и ночь: сверчки; ночь: сова и тихая музыка; утро и день: птицы
+    night,
   });
-  lanterns.update(now / 1000);
+  lanterns.update(now / 1000, lamps);
 
   placeOn(hoverFrame, input.hoverCell);
-  placeOn(frontMarker, frontCell());
+  placeOn(frontMarker, actionCell());
 
   pipeline.render(dt);
   devPanel?.tick(now);

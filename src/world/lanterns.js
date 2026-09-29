@@ -6,6 +6,7 @@ import { glowMaterial } from '../render/glow.js';
 import { getMaterial, mapTextures } from '../art/assets.js';
 import { mergeStatic } from '../render/merge.js';
 
+const coneColor = new THREE.Color(LIGHTING.lanternColor).multiplyScalar(LIGHTING.coneStrength);
 const iron = new THREE.MeshStandardMaterial({ color: '#2a2624', metalness: 0.6, roughness: 0.5 });
 
 function lanternLight(color, intensity, distance, castShadow, quality) {
@@ -27,6 +28,7 @@ function lanternLight(color, intensity, distance, castShadow, quality) {
 // Конус света под фонарём: мягкое свечение в вечернем воздухе.
 // Яркость спадает к земле и к краям конуса (края «размыты»), поэтому это не форма, а дымка света.
 // Обычный предмет со своим простым шейдером — без дополнительных проходов.
+const cones = []; // все конусы — чтобы гасить днём
 const coneMaterial = () => new THREE.ShaderMaterial({
   uniforms: { uColor: { value: new THREE.Color(LIGHTING.lanternColor).multiplyScalar(LIGHTING.coneStrength) } },
   vertexShader: /* glsl */ `
@@ -55,6 +57,7 @@ const coneMaterial = () => new THREE.ShaderMaterial({
 
 function lightCone(height, radius) {
   const cone = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 24, 1, true), coneMaterial());
+  cones.push(cone);
   cone.position.y = -height / 2; // вершина — у фонаря
   cone.castShadow = false;
   cone.renderOrder = 2;
@@ -64,7 +67,7 @@ function lightCone(height, radius) {
 // Фонарь: стекло светится, внутри — источник света; сверху шапочка
 function lanternHead(scale = 1) {
   const head = new THREE.Group();
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.16), glowMaterial(LIGHTING.lanternColor, 0.9));
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.16), glowMaterial(LIGHTING.lanternColor, 0.9, { lamp: true }));
   glass.castShadow = false; // не заслоняет собственный свет
   head.add(glass);
   for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { // рёбра каркаса
@@ -150,13 +153,18 @@ export function createLanterns(scene, quality) {
     positions: lights.map((l) => l.light.position.clone()),
     // Живой огонь: свет чуть подрагивает. Тени фонарей обновляются раз в 6 кадров (по очереди) —
     // двигается только герой, а каждая такая тень — это 6 перерисовок сцены.
-    update(time) {
+    // lamps — горят ли фонари: 0 — погашены (день), 1 — горят (вечер и ночь)
+    update(time, lamps = 1) {
       frame++;
       lights.forEach((l, i) => {
         if (l.light.castShadow && (frame + i) % 6 === 0) l.light.shadow.needsUpdate = true;
       });
       for (const l of lights) {
-        l.light.intensity = l.base * (0.92 + 0.05 * Math.sin(time * 7 + l.phase) + 0.03 * Math.sin(time * 13 + l.phase * 2));
+        l.light.intensity = lamps * l.base * (0.92 + 0.05 * Math.sin(time * 7 + l.phase) + 0.03 * Math.sin(time * 13 + l.phase * 2));
+      }
+      for (const c of cones) {
+        c.visible = lamps > 0.01;
+        c.material.uniforms.uColor.value.copy(coneColor).multiplyScalar(lamps);
       }
     },
   };

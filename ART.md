@@ -42,7 +42,11 @@
 Сколько места в игре занимает одна картинка (повторяется дальше): трава, обрыв, доски, черепица — 4×4 клетки;
 земля, камень, кора, листва, дерево — 2×2 клетки; плетёнка — 1 клетка.
 
-## Фон — вечернее небо (`sky.png`)
+## Фон — небо по времени суток (`sky.png` / `sky-evening.png`, `sky-morning.png`, `sky-day.png`, `sky-night.png`)
+В игре четыре неба — для утра, дня, вечера и ночи; между ними игра плавно переходит сама.
+Пока картинки нет, рисуется градиент из config.js → DAYTIME. Ниже — вечернее, за ним — остальные три.
+
+### Вечер (`sky.png` или `sky-evening.png`)
 Картинка за островом, во весь экран. Главное — **приглушённая и мягкая**: остров освещён фонарями,
 фон не должен с ним спорить (никаких ярких пятен, резких переходов и насыщенных цветов).
 Игра сама растягивает её по экрану без искажений, лишнее обрезает по краям — поэтому важное не ставь к краям.
@@ -54,6 +58,21 @@
 > Muted evening sky backdrop for a cozy video game. Soft painterly gradient from dusty slate blue at the top (#1e2236) through muted lavender (#3a3450, #554457) to faded warm rose-brown near the bottom (#735a5a). Very low contrast and low saturation, calm and hazy. Barely visible soft clouds in the middle, a few faint tiny stars only at the very top. No sun disc, no bright spots, no glow, no horizon line, no landscape, no trees, no buildings, no objects, no text, no border. Slight film grain. Looks like an out-of-focus background behind a brightly lit foreground. Square 1536x1536.
 
 Если выйдет слишком ярко или контрастно — добавь в конец: *even more muted, darker, flatter, less saturated*.
+
+Для утра, дня и ночи — тот же формат (квадрат 1536×1536, PNG), те же правила: мягко, без ярких пятен и солнечного диска
+(солнце и луну игра рисует светом, не картинкой). Звёзды на ночное небо игра добавит сама — на картинке их не нужно.
+
+### Утро (`sky-morning.png`)
+Цвета сцены (сверху вниз): `#3d3f78` → `#9a6f9e` → `#e38f7c` → `#f5a86a`.
+> Soft dawn sky backdrop for a cozy video game. Painterly gradient from muted indigo at the top (#3d3f78) through dusty mauve (#9a6f9e) to warm coral pink (#e38f7c) and soft apricot near the bottom (#f5a86a). Gentle, hazy, low contrast. A few thin soft pink-lit clouds in the lower half. No sun disc, no bright spots, no glow, no horizon line, no landscape, no trees, no buildings, no objects, no text, no border. Slight film grain. Looks like an out-of-focus background behind a lit foreground. Square 1536x1536.
+
+### День (`sky-day.png`)
+Тёплый золотой осенний день. Цвета сцены (сверху вниз): `#7d6f93` → `#c98a62` → `#dd9154` → `#e39e62`.
+> Warm golden autumn afternoon sky backdrop for a cozy video game. Painterly gradient from soft dusty violet at the top (#7d6f93) through warm terracotta (#c98a62) to glowing amber orange near the bottom (#dd9154, #e39e62). Soft, hazy, cozy, low contrast. A few soft fluffy clouds with warm golden edges in the middle. No sun disc, no bright spots, no horizon line, no landscape, no trees, no buildings, no objects, no text, no border. Slight film grain. Looks like an out-of-focus background behind a lit foreground. Square 1536x1536.
+
+### Ночь (`sky-night.png`)
+Цвета сцены (сверху вниз): `#080a16` → `#121633` → `#1d1f3f` → `#2a2742`.
+> Calm night sky backdrop for a cozy video game. Painterly gradient from almost black deep navy at the top (#080a16) through dark indigo (#121633, #1d1f3f) to muted dark violet near the bottom (#2a2742). Very dark, soft, low contrast. Faint thin bluish clouds lit by unseen moonlight in the lower half. No stars, no moon disc, no bright spots, no glow, no horizon line, no landscape, no trees, no buildings, no objects, no text, no border. Slight film grain. Square 1536x1536.
 
 ## Пиксельные спрайты
 Сейчас нарисованы кодом (`src/art/sprite-art.js`). Свой лист — PNG **с прозрачным фоном**, того же размера

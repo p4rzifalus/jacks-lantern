@@ -27,7 +27,8 @@ export function createLightRays(scene, quality, lighting) {
   const { count, strength, length } = LIGHTING.rays;
   const rayCount = quality.godRays ? count : 0; // на слабом качестве лучей нет — только лунное пятно
 
-  // Где лучи касаются земли: разбросаны по острову, у каждого своя ширина и своё «дыхание»
+  // Где лучи касаются земли: разнесены по острову равномерно (по кругу с небольшим разбросом), чтобы реже
+  // пересекались; у каждого своя ширина и своё «дыхание»
   let seed = 11;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const rays = [];
@@ -47,7 +48,7 @@ export function createLightRays(scene, quality, lighting) {
     scene.add(mesh);
     rays.push({
       mesh,
-      ground: new THREE.Vector3(-5 + rand() * 10, 0, -6 + rand() * 11),
+      ground: new THREE.Vector3(Math.cos((i / rayCount) * Math.PI * 2) * 3.8 + rand() - 0.5, 0, -0.8 + Math.sin((i / rayCount) * Math.PI * 2) * 4.2 + rand() - 0.5),
       width: 0.9 + rand() * 1.8,
       phase: rand() * 10,
       speed: 0.15 + rand() * 0.25,
@@ -71,7 +72,7 @@ export function createLightRays(scene, quality, lighting) {
       pool.intensity = LIGHTING.moonPool.intensity * moonlight;
       pool.visible = moonlight > 0.01;
 
-      const lightOn = amount > 0.01 && lighting.sun.intensity > 0.01;
+      const lightOn = amount > 0.01;
       // направление — от солнца, но не положе MIN_SLOPE: у горизонта настоящие лучи легли бы плашмя на землю
       toSun.copy(lighting.sun.position).sub(lighting.sun.target.position);
       const flat = Math.hypot(toSun.x, toSun.z);
@@ -90,7 +91,7 @@ export function createLightRays(scene, quality, lighting) {
         pos.needsUpdate = true;
         const breathe = 0.55 + 0.45 * Math.sin(time * r.speed + r.phase);
         const u = r.mesh.material.uniforms;
-        u.uStrength.value = strength * amount * breathe * Math.min(1, lighting.sun.intensity / 2);
+        u.uStrength.value = strength * amount * breathe;
         u.uColor.value.copy(lighting.sun.color);
       }
     },
