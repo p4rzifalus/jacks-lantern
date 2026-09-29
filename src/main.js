@@ -87,6 +87,11 @@ scene.add(hero.object);
 const night = createNight({
   game,
   daytime,
+  // скоро придёт дух: у его ряда в тумане проступает свечение и звучит «у-у»
+  onWarn(row) {
+    spirits.warn(row);
+    sound.spiritAppear();
+  },
   onSpawn: (spirit) => spirits.add(spirit),
   onStolen(spirit, loot) {
     ui.hint(night.describe(spirit, loot), 2800);
@@ -109,7 +114,6 @@ const embers = createEmbers(scene, {
   },
 });
 const spirits = createSpirits(scene, camera, landmarks.island, night, {
-  onAppear: () => sound.spiritAppear(),
   onGrab(spirit, loot, at) {
     sound.spiritGrab();
     if (loot.coins) effects.coins(at);
@@ -349,7 +353,7 @@ renderer.setAnimationLoop((now) => {
   weather.update(dt, decor.wind);
   if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
     daytime.update(dt);
-    night.update();
+    night.update(dt);
     spirits.update(dt, now / 1000);
     embers.update(dt, now / 1000, hero.position);
   }

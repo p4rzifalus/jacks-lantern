@@ -1,7 +1,8 @@
-// Ночь — только правила: когда приходят духи, к чему идёт каждый, что пропадает, кто их пугает, что сказать утром.
+// Ночь — только правила: когда и по какому ряду приходят духи, где останавливаются, что пропадает, кто их пугает,
+// что сказать утром. Ряд — столбец клеток x от дальнего края огорода (z = 7) к дому (z = 0).
 // Как духи выглядят и двигаются — world/spirits.js. Числа — config.js → SPIRITS.
 // Набеги идут только во время игры: часы суток стоят, пока игра закрыта или открыто меню.
-import { SPIRITS, PLANTS, CELL_SIZE } from './config.js';
+import { SPIRITS, PLANTS, CELL_SIZE, GARDEN_SIZE } from './config.js';
 import { countOf } from './game.js';
 import { cellToWorld } from './grid.js';
 
@@ -26,8 +27,6 @@ function pickKind() {
   return kinds[0][0];
 }
 
-const same = (a, b) => a && b && a.x === b.x && a.z === b.z;
-
 // «1 семя», «2 семени», «5 семян»
 function seedsOf(n) {
   const mod10 = n % 10;
@@ -51,53 +50,51 @@ export function morningReport({ scared, lost, faded }) {
   return rows;
 }
 
-// onSpawn(spirit) — пришёл дух: { id, kind, name, target } (target: { cell } | { basket: true } | null — просто бродит)
+// onWarn(row) — скоро придёт дух по ряду row: в тумане проступает свечение
+// onSpawn(spirit) — пришёл дух: { id, kind, name, row, target: null } (target появляется, когда он что-то хватает)
 // onStolen(spirit, loot) — дух что-то унёс: loot { crop } или { coins }
 // onMorning(summary) — ночь кончилась: { scared, lost, faded } (строки для окна — morningReport)
-export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
+export function createNight({ game, daytime, onWarn, onSpawn, onStolen, onMorning }) {
   let active = false;
-  let schedule = [];   // когда придут духи (доля ночи 0..1)
+  let left = 0;        // сколько духов ещё придёт этой ночью
+  let wait = 0;        // секунд до следующего предупреждения
+  let warned = null;   // { row, t } — у ряда светится туман, дух вот-вот поднимется
   let spirits = [];    // духи этой ночи, которые ещё здесь
   let nextId = 1;
-  let cropsTaken = 0;  // сколько грядок уже унесли или вот-вот унесут
   let lost = { crops: {}, coins: 0 };
   let scared = 0;      // сколько духов прогнали за ночь
 
-  function startNight() {
-    active = true;
-    const [min, max] = SPIRITS.perNight;
-    const count = Math.round(rand(min, max));
-    schedule = Array.from({ length: count }, () => rand(0.05, 0.8)).sort((a, b) => a - b);
-    cropsTaken = 0;
+  function reset() {
     lost = { crops: {}, coins: 0 };
     scared = 0;
   }
 
+  function startNight() {
+    active = true;
+    const [min, max] = SPIRITS.perNight;
+    left = Math.round(rand(min, max));
+    wait = SPIRITS.firstDelay;
+    warned = null;
+    reset();
+  }
+
   function endNight() {
     active = false;
-    schedule = [];
+    left = 0;
+    warned = null;
     spirits = [];
     const faded = game.endOfNight(); // защитники отслужили ещё ночь; кто своё отслужил — отцвёл
     onMorning({ scared, lost, faded });
   }
 
-  // Куда пойти новому духу: спелая грядка (которую ещё никто не выбрал), корзинка с монетами или просто побродить
-  function chooseTarget() {
-    const taken = spirits.map((s) => s.target?.cell).filter(Boolean);
-    const ripe = game.ripeCells().filter((c) => !taken.some((t) => same(t, c)));
-    const canCrop = cropsTaken < SPIRITS.maxCropsPerNight && ripe.length > 0;
-    const canCoins = game.state.coins > 0 && !spirits.some((s) => s.target?.basket);
-    if (canCoins && (!canCrop || Math.random() < SPIRITS.basketChance)) return { basket: true };
-    if (canCrop) {
-      cropsTaken++;
-      return { cell: ripe[Math.floor(Math.random() * ripe.length)] };
-    }
-    return null;
+  function warn() {
+    warned = { row: Math.floor(Math.random() * GARDEN_SIZE), t: SPIRITS.warnSeconds };
+    onWarn?.(warned.row);
   }
 
-  function spawn() {
+  function spawn(row) {
     const kind = pickKind();
-    const spirit = { id: nextId++, kind, name: SPIRITS.kinds[kind].name, target: chooseTarget(), fear: 0, loot: null, fled: false };
+    const spirit = { id: nextId++, kind, name: SPIRITS.kinds[kind].name, row, target: null, fear: 0, loot: null, fled: false };
     spirits.push(spirit);
     onSpawn(spirit);
   }
@@ -105,30 +102,54 @@ export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
   return {
     get active() { return active; },
 
-    update() {
+    update(dt) {
       const phase = daytime.phase();
       if (phase.id === 'night' && !active) startNight();
       if (phase.id !== 'night' && active) endNight();
-      while (active && schedule.length && schedule[0] <= phase.progress) {
-        schedule.shift();
-        spawn();
+      if (warned) {
+        warned.t -= dt;
+        if (warned.t <= 0) {
+          spawn(warned.row);
+          warned = null;
+        }
+      }
+      if (!active || !left) return;
+      wait -= dt;
+      if (wait <= 0 && !warned) {
+        left--;
+        wait = rand(...SPIRITS.interval);
+        warn();
       }
     },
 
-    // Дух докопался: забрать добычу. Возвращает { crop } / { coins } или null (добычи уже нет)
-    grab(spirit) {
-      const t = spirit.target;
+    // Где дух остановится в своём ряду: первое спелое растение впереди (дух идёт от дальнего края к дому,
+    // z — где он сейчас, в клетках). null — впереди спелых нет, ряд пройден насквозь.
+    stopAhead(spirit, z) {
+      let stop = null;
+      for (const c of game.ripeCells()) {
+        if (c.x !== spirit.row || c.z > z + 0.05) continue;
+        if (!stop || c.z > stop.z) stop = c;
+      }
+      return stop;
+    },
+
+    // Спелое ли ещё растение, которое дух тянет (его могли собрать)
+    isRipe(cell) {
+      return game.ripeCells().some((c) => c.x === cell.x && c.z === cell.z);
+    },
+
+    // Дух дотянул: забрать добычу. target — { cell } (растение) или { basket: true }.
+    // Возвращает { crop } / { coins } или null (добычи уже нет)
+    grab(spirit, target) {
       let loot = null;
-      if (t?.cell) {
-        const nights = game.garden.cell(t.cell).nights || 0;
-        const crop = game.stealCrop(t.cell);
+      if (target.cell) {
+        const nights = game.garden.cell(target.cell).nights || 0;
+        const crop = game.stealCrop(target.cell);
         if (crop) {
           lost.crops[crop] = (lost.crops[crop] || 0) + 1;
           loot = { crop, nights };
-        } else {
-          cropsTaken--; // урожай успели собрать — эта грядка не в счёт
         }
-      } else if (t?.basket) {
+      } else if (target.basket) {
         const want = Math.min(SPIRITS.maxCoins, Math.max(1, Math.round(game.state.coins * SPIRITS.coinShare)));
         const coins = game.stealCoins(want);
         if (coins) {
@@ -136,8 +157,11 @@ export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
           loot = { coins };
         }
       }
-      spirit.loot = loot;
-      if (loot) onStolen(spirit, loot);
+      if (loot) {
+        spirit.target = target;
+        spirit.loot = loot;
+        onStolen(spirit, loot);
+      }
       return loot;
     },
 
@@ -171,7 +195,6 @@ export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
       scared++;
       const loot = spirit.loot;
       spirit.loot = null;
-      if (!loot && spirit.target?.cell) cropsTaken--; // не успел — грядка снова «свободна» для других
       if (loot?.crop) {
         const back = game.returnCrop(spirit.target.cell, loot.crop, loot.nights);
         if (back) lost.crops[loot.crop]--;
@@ -196,14 +219,10 @@ export function createNight({ game, daytime, onSpawn, onStolen, onMorning }) {
       return `${spirit.name} утащил из корзинки ${coinsOf(loot.coins)}`;
     },
 
-    // Только для проверки (панель G): позвать духа прямо сейчас, даже днём
+    // Только для проверки (панель G): позвать духа прямо сейчас (случайный ряд), даже днём
     spawnNow() {
-      if (!active) {
-        lost = { crops: {}, coins: 0 };
-        cropsTaken = 0;
-        scared = 0;
-      }
-      spawn();
+      if (!active) reset();
+      warn();
     },
   };
 }
