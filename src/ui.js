@@ -269,7 +269,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onShopToggle, onCl
       shopButton.classList.toggle('selected', view.shopOpen);
       closeUpButton.classList.toggle('on', !!view.closeUp);
       closeUpButton.setAttribute('aria-pressed', String(!!view.closeUp));
-      coinsBox.textContent = `Монеты: ${view.coins}`;
+      coinsBox.innerHTML = `Монеты: ${view.coins}${view.embers ? `<span class="embers">Огоньки: ${view.embers}</span>` : ''}`;
 
       seedRow.classList.toggle('visible', view.tool === 'seeds');
       seedRow.innerHTML = view.seedOptions

@@ -63,7 +63,9 @@ export const COLORS = {
   wispCore: '#fff4c2',      // блуждающий огонь
   wispFlame: '#79d8ff',
   wispTip: '#b8f0ff',
-  spiritCoin: '#f2c24a',    // монетка в лапах у духа
+  spiritCoin: '#f2c24a',    // монета в лапах у духа
+  emberCore: '#fff1c4',     // огонёк — второй ресурс (от прогнанного духа): тёплое ядро…
+  emberFlame: '#ffab4a',    // …и янтарное пламя
   // Одежда огородника (общая для всех скинов)
   overalls: '#3a5a8a',
   hat: '#e8cf8a',
@@ -98,12 +100,22 @@ export const HERO_START = { x: 4, z: 8 };     // где герой появля�
 //   sellPrice    — сколько монет даёт корзинка за урожай
 //   unlock       — когда открывается: собрать count штук растения plant
 //   forms        — как сказать «собери 1 / 3 / 5 …» (для подсказок)
+//   defense      — как защищает ночью, если спелое и не собрано:
+//                  role — роль (для магазина), radius — на сколько клеток вокруг действует,
+//                  power — сколько страха в секунду нагоняет на духа (у самого растения — полностью, к краю — вдвое слабее),
+//                  slow — насколько замедляет духов рядом (0 — никак, 0.5 — вдвое),
+//                  nights — сколько ночей служит, потом отцветает; seeds — сколько семян оставляет [от, до]
 export const PLANTS = {
-  carrot:    { name: 'Морковь',         stageSeconds: 20,  seedPrice: 0,   sellPrice: 2,   unlock: null,                           forms: ['морковку', 'морковки', 'морковок'] },
-  radish:    { name: 'Редис',           stageSeconds: 30,  seedPrice: 5,   sellPrice: 8,   unlock: { plant: 'carrot', count: 5 },    forms: ['редиску', 'редиски', 'редисок'] },
-  pumpkin:   { name: 'Тыква',           stageSeconds: 60,  seedPrice: 15,  sellPrice: 30,  unlock: { plant: 'radish', count: 5 },    forms: ['тыкву', 'тыквы', 'тыкв'] },
-  sunflower: { name: 'Подсолнух',       stageSeconds: 120, seedPrice: 40,  sellPrice: 80,  unlock: { plant: 'pumpkin', count: 3 },   forms: ['подсолнух', 'подсолнуха', 'подсолнухов'] },
-  mushroom:  { name: 'Светящийся гриб', stageSeconds: 300, seedPrice: 100, sellPrice: 250, unlock: { plant: 'sunflower', count: 3 }, forms: ['гриб', 'гриба', 'грибов'] },
+  carrot:    { name: 'Морковь',         stageSeconds: 20,  seedPrice: 0,   sellPrice: 2,   unlock: null,                           forms: ['морковку', 'морковки', 'морковок'],
+    defense: { role: 'сторожит свою грядку', radius: 1, power: 0.8, slow: 0, nights: 1, seeds: [1, 1] } },
+  radish:    { name: 'Редис',           stageSeconds: 30,  seedPrice: 5,   sellPrice: 8,   unlock: { plant: 'carrot', count: 5 },    forms: ['редиску', 'редиски', 'редисок'],
+    defense: { role: 'жгучий: пугает рядом', radius: 1.5, power: 1.6, slow: 0, nights: 2, seeds: [1, 2] } },
+  pumpkin:   { name: 'Тыква',           stageSeconds: 60,  seedPrice: 15,  sellPrice: 30,  unlock: { plant: 'radish', count: 5 },    forms: ['тыкву', 'тыквы', 'тыкв'],
+    defense: { role: 'стена: замедляет духов', radius: 1.8, power: 0.8, slow: 0.55, nights: 3, seeds: [1, 2] } },
+  sunflower: { name: 'Подсолнух',       stageSeconds: 120, seedPrice: 40,  sellPrice: 80,  unlock: { plant: 'pumpkin', count: 3 },   forms: ['подсолнух', 'подсолнуха', 'подсолнухов'],
+    defense: { role: 'свет: пугает далеко', radius: 2.8, power: 1.4, slow: 0, nights: 3, seeds: [1, 2] } },
+  mushroom:  { name: 'Светящийся гриб', stageSeconds: 300, seedPrice: 100, sellPrice: 250, unlock: { plant: 'sunflower', count: 3 }, forms: ['гриб', 'гриба', 'грибов'],
+    defense: { role: 'сияние: пугает сильнее всех', radius: 2.2, power: 3, slow: 0.2, nights: 3, seeds: [1, 1] } },
 };
 
 // Скорость роста всех растений: 1 — обычная, 10 — в десять раз быстрее (удобно для проверки)
@@ -167,7 +179,8 @@ export const QUALITY = {
 };
 
 // Нечисть: ночью духи поднимаются из тумана и пытаются утащить урожай с грядок или монеты из корзинки.
-// Никого не прогоняют и не уничтожают (защита — растения, этап 8); набеги — только во время игры.
+// Спелые несобранные растения их пугают: испуганный дух убегает, роняет добычу и оставляет огонёк.
+// Духов никто не уничтожает; набеги — только во время игры.
 export const SPIRITS = {
   perNight: [5, 6],      // сколько духов приходит за ночь (случайно между)
   maxCropsPerNight: 4,   // сколько спелых грядок они могут унести за ночь
@@ -175,12 +188,15 @@ export const SPIRITS = {
   maxCoins: 20,          // …но не больше стольких
   basketChance: 0.35,    // как часто дух летит к корзинке, если есть и монеты, и спелые грядки
   grabSeconds: 2,        // сколько дух «копается», прежде чем утащить
-  // виды духов: имя (для подсказок), скорость (клеток в секунду), как часто встречается
+  // виды духов: имя (для подсказок), скорость (клеток в секунду), как часто встречается,
+  // courage — смелость: сколько страха выдерживает, прежде чем убежать (страх нагоняют растения, см. PLANTS → defense)
   kinds: {
-    ghost: { name: 'Призрак', speed: 1.1, weight: 3 },
-    skeleton: { name: 'Скелет', speed: 0.8, weight: 2 },
-    wisp: { name: 'Блуждающий огонь', speed: 1.7, weight: 2 },
+    ghost: { name: 'Призрак', speed: 1.1, weight: 3, courage: 3 },
+    skeleton: { name: 'Скелет', speed: 0.8, weight: 2, courage: 4.5 },
+    wisp: { name: 'Блуждающий огонь', speed: 1.7, weight: 2, courage: 2 },
   },
+  fleeSpeed: 3,          // как быстро убегает испуганный дух (клеток в секунду)
+  emberReach: 0.7,       // огонёк от прогнанного духа: с какого расстояния енот его подбирает (в клетках)
 };
 
 // Смена дня и ночи (идёт только во время игры; при каждом входе в игру — утро).

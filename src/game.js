@@ -30,6 +30,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     seeds: {},      // запас семян: { radish: 3, ... } (морковь бесплатная, её не считаем)
     harvested: {},  // сколько чего отнесено в корзинку: { carrot: 7, ... }
     held: null,     // что у героя в лапах
+    embers: 0,      // огоньки — от прогнанных ночью духов
     shopOpen: false,
   };
 
@@ -132,6 +133,40 @@ export function createGame({ onHint, onEffect, onChange }) {
       changed();
       return type;
     },
+    // Дух испугался и уронил добычу: урожай — обратно на грядку спелым (если свободна), монеты — в корзинку
+    returnCrop(c, type, nights) {
+      const ok = garden.putBackRipe(c, type, nights);
+      if (ok) changed();
+      return ok;
+    },
+    returnCoins(n) {
+      state.coins += n;
+      changed();
+    },
+    addEmbers(n) {
+      state.embers += n;
+      changed();
+    },
+
+    // Утро: каждое спелое растение отслужило ещё одну ночь. Кто отслужил своё — отцветает и оставляет семена.
+    // Возвращает, что отцвело: [{ type, seeds }]
+    endOfNight() {
+      const faded = [];
+      for (const cell of garden.cells) {
+        if (garden.stage(cell) !== RIPE) continue;
+        cell.nights = (cell.nights || 0) + 1;
+        const d = PLANTS[cell.plant].defense;
+        if (cell.nights < d.nights) continue;
+        const type = garden.harvest(cell);
+        const [min, max] = d.seeds;
+        const seeds = isFree(type) ? 0 : min + Math.floor(Math.random() * (max - min + 1));
+        if (seeds) state.seeds[type] = (state.seeds[type] || 0) + seeds;
+        faded.push({ type, seeds });
+      }
+      changed();
+      return faded;
+    },
+
     // Унести монеты из корзинки (сколько — решает night.js). Возвращает, сколько унесли
     stealCoins(amount) {
       const taken = Math.min(state.coins, Math.max(0, Math.floor(amount)));
@@ -145,6 +180,7 @@ export function createGame({ onHint, onEffect, onChange }) {
       return {
         tool: state.tool,
         coins: state.coins,
+        embers: state.embers,
         shopOpen: state.shopOpen,
         selectedSeed: state.selectedSeed,
         seedOptions: PLANT_TYPES
@@ -171,12 +207,13 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     // Для сохранения (позицию героя добавляет main.js)
     toSave() {
-      const { coins, seeds, harvested, held, tool, selectedSeed } = state;
-      return { cells: garden.toSave(), coins, seeds, harvested, held, tool, selectedSeed };
+      const { coins, embers, seeds, harvested, held, tool, selectedSeed } = state;
+      return { cells: garden.toSave(), coins, embers, seeds, harvested, held, tool, selectedSeed };
     },
     load(saved) {
       garden.load(saved.cells || []);
       state.coins = saved.coins || 0;
+      state.embers = saved.embers || 0;
       state.seeds = saved.seeds || {};
       state.harvested = saved.harvested || {};
       if (TOOL_IDS.includes(saved.tool)) state.tool = saved.tool;

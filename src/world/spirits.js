@@ -1,5 +1,6 @@
 // Духи — как выглядят и двигаются: поднимаются из тумана у края острова, летят (скелет — идёт пешком)
 // к своей цели, копаются, уносят добычу и опускаются обратно в туман. На рассвете тают.
+// Рядом со спелыми растениями дух дрожит, а испугавшись — роняет добычу и быстро улетает.
 // Что им можно и что пропадает, решают правила (night.js): здесь только движение.
 import * as THREE from 'three';
 import { SPIRITS, CELL_SIZE, BASKET_CELL } from '../config.js';
@@ -64,11 +65,11 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     hooks.onAppear?.(spirit);
   }
 
-  // Двигаться к точке на своей высоте; true — дошёл
-  function moveTo(s, point, dt) {
+  // Двигаться к точке на своей высоте; true — дошёл. speed — клеток в секунду
+  function moveTo(s, point, dt, speed = SPIRITS.kinds[s.kind].speed) {
     const pos = s.sprite.object.position;
     const to = point.clone().setY(0).sub(pos.clone().setY(0));
-    const step = SPIRITS.kinds[s.kind].speed * CELL_SIZE * dt;
+    const step = speed * CELL_SIZE * dt;
     const dist = to.length();
     if (dist <= step) {
       pos.x = point.x;
@@ -106,6 +107,24 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       s.t += dt;
       const hover = HOVER[s.kind] + (s.kind === 'ghost' ? Math.sin(time * 2 + s.phase) * 0.08 : 0);
 
+      // страх: рядом со спелыми растениями дух замедляется и дрожит; испугался — убегает
+      let slow = 0;
+      if (s.state === 'go' || s.state === 'grab' || s.state === 'leave') {
+        const fear = night.scare(s.spirit, pos, dt);
+        slow = fear.slow;
+        if (fear.scared) {
+          const returned = night.flee(s.spirit);
+          s.loot.mesh.visible = false;
+          s.state = 'flee';
+          s.t = 0;
+          s.exit = edgePoint(Math.atan2(pos.z - center.z, pos.x - center.x));
+          hooks.onScared?.(s.spirit, pos.clone().setY(0), fear.from, returned);
+        }
+      }
+      const speed = SPIRITS.kinds[s.kind].speed * (1 - slow);
+      const courage = SPIRITS.kinds[s.kind].courage;
+      const shake = s.state === 'flee' || s.spirit.fear > courage * 0.5 ? Math.sin(time * 40 + s.phase) * 0.03 : 0;
+
       if (s.state === 'rise') {
         // поднимается из тумана, потом летит к цели
         const k = Math.min(1, s.t / RISE);
@@ -113,7 +132,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
         if (k >= 1) { s.state = 'go'; s.t = 0; }
       } else if (s.state === 'go') {
         pos.y = hover;
-        if (moveTo(s, s.stops[0], dt)) { s.state = 'grab'; s.t = 0; }
+        if (moveTo(s, s.stops[0], dt, speed)) { s.state = 'grab'; s.t = 0; }
       } else if (s.state === 'grab') {
         pos.y = hover;
         const wait = s.spirit.target ? SPIRITS.grabSeconds : 1.2; // бродяга просто заглядывает
@@ -138,7 +157,11 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
         }
       } else if (s.state === 'leave') {
         pos.y = hover;
-        if (moveTo(s, s.exit, dt)) { s.state = 'sink'; s.t = 0; }
+        if (moveTo(s, s.exit, dt, speed)) { s.state = 'sink'; s.t = 0; }
+      } else if (s.state === 'flee') {
+        // испугался: быстро прочь, чуть подпрыгнув
+        pos.y = hover + Math.min(0.4, s.t * 1.5);
+        if (moveTo(s, s.exit, dt, SPIRITS.fleeSpeed)) { s.state = 'sink'; s.t = 0; }
       } else if (s.state === 'sink' || s.state === 'fade') {
         // уходит вниз в туман (на рассвете — ещё и тает)
         pos.y -= dt * (s.state === 'fade' ? 1.5 : 2);
@@ -159,6 +182,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       const [first, count] = SPIRIT.anims[anim];
       s.sprite.setFrame(first + (Math.floor(s.animTime * FPS[anim] + s.phase) % count), SPIRIT.rows_[s.kind]);
       s.sprite.mesh.scale.set(s.flip ? -s.scale : s.scale, s.scale, 1);
+      s.sprite.mesh.position.x = shake; // дрожит от страха
     }
   }
 
@@ -177,7 +201,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     // Рассвет: все духи тают и опускаются в туман (с добычей — она уже не вернётся)
     dawn() {
       for (const s of list) {
-        if (s.state !== 'sink') { s.state = 'fade'; s.t = 0; }
+        if (s.state !== 'sink' && s.state !== 'flee') { s.state = 'fade'; s.t = 0; }
       }
     },
   };

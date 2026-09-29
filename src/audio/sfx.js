@@ -79,6 +79,23 @@ export function createSfx(engine) {
       }
     },
 
+    // Дух испугался: короткое «ух!» вверх и вниз, растение отвечает мягким светлым звоном
+    spiritScared() {
+      if (!ready()) return;
+      const t = now();
+      const base = rand(600, 760);
+      tone(engine, FX, { when: t, freq: base, freqEnd: base * 1.6, glide: 0.08, gain: 0.06, attack: 0.01, hold: 0.04, decay: 0.12, filter: 2200, reverb: 0.5 });
+      tone(engine, FX, { when: t + 0.12, freq: base * 1.5, freqEnd: base * 0.7, glide: 0.25, gain: 0.05, attack: 0.01, decay: 0.3, filter: 1800, reverb: 0.6 });
+      tone(engine, FX, { when: t + 0.05, freq: noteHz(88), type: 'triangle', gain: 0.04, decay: 0.8, reverb: 0.7 });
+    },
+
+    // Енот подобрал огонёк: тёплый звон с долгим эхом
+    emberPicked() {
+      if (!ready()) return;
+      const t = now();
+      [81, 88].forEach((n, i) => tone(engine, FX, { when: t + i * 0.07, freq: noteHz(n), type: 'triangle', gain: 0.06, decay: 0.9, reverb: 0.8 }));
+    },
+
     // Дух улетает: мягкий шорох, уходящий вниз
     spiritLeave() {
       if (!ready()) return;

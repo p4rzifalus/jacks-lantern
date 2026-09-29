@@ -366,7 +366,8 @@ export function drawDecorSheet() {
 }
 
 // ---------- Духи ----------
-// Кадр 32×32. Строки: 0 — призрак, 1 — скелет, 2 — блуждающий огонь, 3 — монета (кадр 0; дух несёт её из корзинки).
+// Кадр 32×32. Строки: 0 — призрак, 1 — скелет, 2 — блуждающий огонь, 3 — мелочи: монета (кадр 0; дух несёт её из корзинки),
+// огонёк (кадры 1–4; остаётся от прогнанного духа, мерцает).
 // Колонки: движется 0–3, копается 4–7, несёт 8–11. Все смотрят на зрителя; влево-вправо — зеркалом.
 // Светящиеся пиксели (последний аргумент true) подхватывает свечение — ночью духи сияют.
 export const SPIRIT = {
@@ -459,6 +460,16 @@ function drawWisp(d, anim, i) {
   }
 }
 
+// Огонёк: маленькое тёплое пламя, мерцает (i — кадр 0–3)
+function drawEmber(d, i) {
+  const h = [0, 1, 0, -1][i];
+  d.ellipse(16, 19, 3.5, 3.5, C.emberFlame, true);
+  d.line(16, 16, 16 + [0, 1, 0, -1][(i + 1) % 4], 11 - h, C.emberFlame, true);
+  d.line(15, 17, 14, 13 - h, C.emberFlame, true);
+  d.line(17, 17, 18, 13 + h, C.emberFlame, true);
+  d.ellipse(16, 19, 2, 2, C.emberCore, true);
+}
+
 function drawCoin(d) {
   d.ellipse(16, 16, 4, 4, C.spiritCoin, true);
   d.rect(15, 14, 2, 5, '#b8862a');
@@ -474,5 +485,6 @@ export function drawSpiritSheet() {
     }
   }
   drawCoin(sheet.frame(0, SPIRIT.rows_.coin, 32, 32));
+  for (let i = 0; i < 4; i++) drawEmber(sheet.frame(1 + i, SPIRIT.rows_.coin, 32, 32), i);
   return sheet.finish();
 }

@@ -27,7 +27,8 @@ import { createSound } from './audio/index.js';
 import { createDaytime } from './daytime.js';
 import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
-import { createNight } from './night.js';
+import { createNight, describeMorning } from './night.js';
+import { createEmbers } from './world/embers.js';
 import { createSpirits } from './world/spirits.js';
 
 const quality = detectQuality();
@@ -45,7 +46,7 @@ const daytime = createDaytime(); // часы суток: при каждом в�
 const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, daytime }); // как выглядит время суток
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
-const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight, spawnSpirit: () => night.spawnNow() }) : null;
+const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight, spawnSpirit: () => night.spawnNow(), ripenAll }) : null;
 
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
@@ -89,9 +90,19 @@ const night = createNight({
   onStolen(spirit, loot) {
     ui.hint(night.describe(spirit, loot), 2800);
   },
-  onMorning(text) {
+  onMorning(summary) {
     spirits.dawn();
-    if (text) ui.hint(text, 6000); // утром — что пропало за ночь
+    embers.dawn(); // несобранные огоньки сами летят в счётчик
+    const text = describeMorning(summary);
+    if (text) ui.hint(text, 7000); // утром — итог ночи
+  },
+});
+// Огоньки от прогнанных духов: енот подбирает, проходя рядом
+const embers = createEmbers(scene, {
+  onCollect(at) {
+    game.addEmbers(1);
+    sound.emberPicked();
+    effects.sparkle(at);
   },
 });
 const spirits = createSpirits(scene, camera, landmarks.island, night, {
@@ -102,6 +113,13 @@ const spirits = createSpirits(scene, camera, landmarks.island, night, {
     else effects.sparkle(at);
   },
   onLeave: () => sound.spiritLeave(),
+  // испугался: вспышка у растения, которое напугало, огонёк на месте духа; добыча вернулась
+  onScared(spirit, at, from, returned) {
+    sound.spiritScared();
+    if (from) effects.sparkle(cellToWorld(from.x, from.z));
+    embers.add(at);
+    if (returned) ui.hint(`${spirit.name} испугался и уронил ${returned.crop ? PLANTS[returned.crop].forms[0] : 'монеты'}`, 2800);
+  },
 });
 
 const hoverFrame = createHoverFrame();
@@ -194,6 +212,12 @@ function reloadIntoGame() {
     sessionStorage.setItem(SKIP_INTRO, '1');
   } catch { /* не страшно: просто покажется стартовый экран */ }
   location.reload();
+}
+
+// Только для проверки (панель G): всё посаженное — сразу спелое
+function ripenAll() {
+  for (const cell of game.garden.cells) if (cell.plant) cell.wateredAt = 1;
+  refresh();
 }
 
 function restart() {
@@ -321,6 +345,7 @@ renderer.setAnimationLoop((now) => {
     daytime.update(dt);
     night.update();
     spirits.update(dt, now / 1000);
+    embers.update(dt, now / 1000, hero.position);
   }
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
@@ -354,7 +379,7 @@ renderer.setAnimationLoop((now) => {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits,
+    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

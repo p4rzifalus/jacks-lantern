@@ -9,7 +9,7 @@ export class GardenState {
   constructor() {
     this.cells = [];
     for (let x = 0; x < GARDEN_SIZE; x++) {
-      for (let z = 0; z < GARDEN_SIZE; z++) this.cells.push({ x, z, plant: null, wateredAt: null });
+      for (let z = 0; z < GARDEN_SIZE; z++) this.cells.push({ x, z, plant: null, wateredAt: null, nights: 0 });
     }
   }
 
@@ -31,7 +31,7 @@ export class GardenState {
   }
 
   plant(c, type) {
-    Object.assign(this.cell(c), { plant: type, wateredAt: null });
+    Object.assign(this.cell(c), { plant: type, wateredAt: null, nights: 0 });
   }
 
   water(c) {
@@ -42,21 +42,30 @@ export class GardenState {
   harvest(c) {
     const cell = this.cell(c);
     const type = cell.plant;
-    Object.assign(cell, { plant: null, wateredAt: null });
+    Object.assign(cell, { plant: null, wateredAt: null, nights: 0 });
     return type;
+  }
+
+  // Вернуть спелый урожай на пустую грядку (дух испугался и уронил его). nights — сколько ночей уже отслужило
+  putBackRipe(c, type, nights = 0) {
+    const cell = this.cell(c);
+    if (cell.plant) return false;
+    const ripeMs = (PLANTS[type].stageSeconds * 1000 * RIPE) / GROWTH_SPEED;
+    Object.assign(cell, { plant: type, wateredAt: Date.now() - ripeMs - 1000, nights });
+    return true;
   }
 
   // Для сохранения: только клетки, где что-то есть
   toSave() {
     return this.cells
       .filter((cell) => cell.plant)
-      .map(({ x, z, plant, wateredAt }) => ({ x, z, plant, wateredAt }));
+      .map(({ x, z, plant, wateredAt, nights }) => ({ x, z, plant, wateredAt, nights }));
   }
 
   load(saved) {
-    for (const { x, z, plant, wateredAt } of saved) {
+    for (const { x, z, plant, wateredAt, nights = 0 } of saved) {
       if (x >= 0 && x < GARDEN_SIZE && z >= 0 && z < GARDEN_SIZE && PLANTS[plant]) {
-        Object.assign(this.cell({ x, z }), { plant, wateredAt });
+        Object.assign(this.cell({ x, z }), { plant, wateredAt, nights });
       }
     }
   }

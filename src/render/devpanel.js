@@ -90,6 +90,7 @@ export function createDevPanel(settings, pipeline, quality, weather, audio, getH
     day.add({ go: jump('evening') }, 'go').name('→ вечер');
     day.add({ go: jump('night') }, 'go').name('→ ночь');
     if (time.spawnSpirit) day.add({ go: time.spawnSpirit }, 'go').name('вызвать духа');
+    if (time.ripenAll) day.add({ go: time.ripenAll }, 'go').name('сделать всё спелым');
   }
 
   if (fogSea) {
