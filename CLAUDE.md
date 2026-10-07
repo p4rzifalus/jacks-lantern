@@ -2,7 +2,7 @@
 
 Браузерная игра: уютный огород днём, лёгкая оборона от милой нечисти ночью.
 Графика: реалистичный мир + пиксельные персонажи, свет и эффекты в духе The Last Night.
-Первая версия (монохромная) живёт отдельно: ~/Desktop/Ферма, https://p4rzifalus.github.io/osennyaya-ferma/
+Первая версия (монохромная) живёт отдельно: ~/Claude Projects/osennyaya-ferma, https://p4rzifalus.github.io/osennyaya-ferma/
 Стек: Three.js (WebGL2) + postprocessing (pmndrs) + Vite. Публикация: GitHub Pages (репозиторий osennyaya-ferma-2).
 
 ## Ссылки для проверки
