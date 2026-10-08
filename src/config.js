@@ -335,8 +335,8 @@ export const DAYTIME = {
   },
   evening: {
     sky: [[0, '#1e2236'], [0.5, '#3a3450'], [0.8, '#554457'], [1, '#735a5a']],
-    skyLight: '#8a7ab0', skyLightIntensity: 1.4, sun: '#ff8a44', sunIntensity: 3.6,
-    reflections: 0.6, lut: 'evening', lamps: 1, stars: 0.05, rays: 0.35, moonlight: 0,
+    skyLight: '#8a7ab0', skyLightIntensity: 1.4, sun: '#ff8a44', sunIntensity: 3,
+    reflections: 0.6, lut: 'evening', lamps: 1, stars: 0.05, rays: 0, moonlight: 0,
   },
   night: {
     sky: [[0, '#080a16'], [0.5, '#121633'], [0.8, '#1d1f3f'], [1, '#2a2742']],
