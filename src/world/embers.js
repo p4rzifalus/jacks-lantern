@@ -2,7 +2,7 @@
 // Енот подбирает огонёк, проходя рядом; на рассвете несобранные сами улетают в счётчик — ничего не теряется.
 import * as THREE from 'three';
 import { SPIRITS, CELL_SIZE } from '../config.js';
-import { Sprite } from '../render/sprites.js';
+import { Sprite, LAYER } from '../render/sprites.js';
 import { getSheets } from './sheets.js';
 import { SPIRIT } from '../art/sprite-art.js';
 import { unregisterSprite } from '../render/view-angle.js';
@@ -25,7 +25,7 @@ export function createEmbers(scene, { onCollect }) {
 
     // Огонёк появился там, где дух испугался (сдвигаем внутрь, куда енот может дойти: огород и дорожка)
     add(at) {
-      const sprite = new Sprite(sheet, { castShadow: false });
+      const sprite = new Sprite(sheet, { castShadow: false, layer: LAYER.fx });
       sprite.object.position.set(THREE.MathUtils.clamp(at.x, -REACH, REACH), 0, THREE.MathUtils.clamp(at.z, -REACH, REACH));
       sprite.mesh.scale.setScalar(0.7);
       scene.add(sprite.object);

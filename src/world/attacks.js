@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { COLORS, CELL_SIZE } from '../config.js';
 import { ParticlePool } from '../render/particles.js';
 import { glowMaterial } from '../render/glow.js';
-import { Sprite } from '../render/sprites.js';
+import { Sprite, LAYER } from '../render/sprites.js';
 import { unregisterSprite } from '../render/view-angle.js';
 import { getSheets } from './sheets.js';
 import { FX } from '../art/sprite-art.js';
@@ -92,7 +92,7 @@ export function createAttacks(scene, positionOf) {
   };
 
   function fxSprite(row, at, scale = 1) {
-    const sprite = new Sprite(fxSheet, { castShadow: false });
+    const sprite = new Sprite(fxSheet, { castShadow: false, layer: LAYER.fx });
     sprite.mesh.geometry.translate(0, -(FX.frameH / 30) / 2, 0); // центр картинки — в точке (а не низ)
     sprite.object.position.copy(at);
     sprite.mesh.scale.setScalar(scale);

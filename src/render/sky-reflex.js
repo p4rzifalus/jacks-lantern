@@ -13,8 +13,9 @@ export const skyUniforms = {
   uFadeStrength: { value: 0.85 },
 };
 
-function patch(material) {
-  if (material.userData.skyPatched) return;
+// Добавить вставку одному материалу (копия материала — clone() — вставку не переносит, её добавляют заново)
+export function patch(material) {
+  if (material.userData.skyPatched && material.customProgramCacheKey() === 'sky-reflex') return;
   if (!(material.isMeshStandardMaterial || material.isMeshLambertMaterial)) return;
   material.userData.skyPatched = true;
   material.onBeforeCompile = (shader) => {

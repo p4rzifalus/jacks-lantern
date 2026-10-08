@@ -8,6 +8,14 @@ import { registerSprite } from './view-angle.js';
 
 export const PX = 1 / 30;             // размер одного пикселя спрайта в мире (≈30 пикселей на клетку)
 
+// Слои спрайтов: кто впереди, если два спрайта стоят в одной точке (иначе видеокарта не может выбрать и они мерцают).
+// Спрайт чуть сдвигается прямо к камере — на экране он не смещается, только оказывается ближе.
+export const LAYER = { ground: 0, hero: 1, spirit: 2, fx: 3 };
+const LAYER_STEP = 0.02;
+const CAMERA_PITCH = Math.atan2(20, 20 * Math.SQRT2); // наклон камеры (как в scene.js: высота 20, по земле 20·√2)
+export const layerOffset = (layer) =>
+  new THREE.Vector3(0, Math.sin(CAMERA_PITCH), Math.cos(CAMERA_PITCH)).multiplyScalar(layer * LAYER_STEP);
+
 function pixelTexture(canvas, colorSpace) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = colorSpace;
@@ -59,7 +67,8 @@ export function createSheet(name, draw, frameW, frameH, { glowStrength = 0.5 } =
 
 export class Sprite {
   // faceCamera: false — для спрайта внутри другого, уже повёрнутого к камере (предмет в лапах героя)
-  constructor(sheet, { castShadow = true, faceCamera = true } = {}) {
+  // layer — слой (LAYER): кто впереди, если стоят в одной точке
+  constructor(sheet, { castShadow = true, faceCamera = true, layer = LAYER.ground } = {}) {
     this.sheet = sheet;
     const geometry = new THREE.PlaneGeometry(sheet.frameW * PX, sheet.frameH * PX);
     geometry.translate(0, (sheet.frameH * PX) / 2, 0); // низ картинки — на земле
@@ -67,6 +76,7 @@ export class Sprite {
     this.mesh.customDepthMaterial = sheet.depthMaterial;
     this.mesh.customDistanceMaterial = sheet.distanceMaterial;
     this.mesh.castShadow = castShadow;
+    this.mesh.position.copy(layerOffset(layer));
     this.object = new THREE.Group(); // двигаем этот объект; внутри он всегда повёрнут к камере
     if (faceCamera) registerSprite(this.object); // повёрнут к камере, поворачивается вместе с ней
     this.object.add(this.mesh);

@@ -1,6 +1,6 @@
 // Правила игры: инструменты, семена, монеты, магазин, открытие новых семян.
 // Здесь нет графики — только состояние и действия. Картинка узнаёт о переменах через колбэки.
-import { PLANTS, BASKET_CELL, HAND_BASKET, GROWTH_SPEED } from './config.js';
+import { PLANTS, BASKET_CELL, HAND_BASKET, GROWTH_SPEED, WILTED_SELL_SHARE, WEATHER } from './config.js';
 import { isInGarden } from './grid.js';
 import { GardenState, EMPTY, RIPE } from './garden.js';
 import { plural } from './text.js';
@@ -13,6 +13,9 @@ export const countOf = (type, n) => plural(n, PLANTS[type].forms);
 
 export const isBasket = (c) => c.x === BASKET_CELL.x && c.z === BASKET_CELL.z;
 
+// Цена урожая: вялый (отстоял ночь на страже) — дешевле
+const priceOf = ({ type, wilted }) => (wilted ? Math.ceil(PLANTS[type].sellPrice * WILTED_SELL_SHARE) : PLANTS[type].sellPrice);
+
 // onHint(text, ms) — показать подсказку; onEffect(name, cell, earned) — для красоты (брызги, искры; earned — выручка при продаже);
 // onChange() — что-то поменялось: обновить интерфейс и сохранить
 export function createGame({ onHint, onEffect, onChange }) {
@@ -23,7 +26,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     coins: 0,
     seeds: {},      // запас семян: { radish: 3, ... } (морковь бесплатная, её не считаем)
     harvested: {},  // сколько чего отнесено в корзинку: { carrot: 7, ... }
-    carried: [],    // что собрано в корзинку для сбора: ['carrot', 'radish']
+    carried: [],    // что собрано в корзинку для сбора: [{ type: 'carrot', wilted: false }, ...] (wilted — отстоял ночь на страже)
     basketLevel: 0, // сколько раз корзинку улучшили в магазине
     embers: 0,      // огоньки — от прогнанных ночью духов
     shopOpen: false,
@@ -45,6 +48,8 @@ export function createGame({ onHint, onEffect, onChange }) {
     if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) state.selectedSeed = 'carrot';
   }
 
+  let rainCarry = 0; // доли грядки, которые дождь «намочил» между кадрами
+
   function changed() {
     checkSelectedSeed();
     onChange();
@@ -62,16 +67,17 @@ export function createGame({ onHint, onEffect, onChange }) {
       if (!isFree(state.selectedSeed)) state.seeds[state.selectedSeed]--;
       onEffect('planted', c);
     } else if (state.tool === 'water') {
-      if (stage === EMPTY) return onHint('Сначала посади семена');
-      if (garden.isWatered(c)) return onHint('Уже полито — растёт');
+      if (garden.isWet(c)) return onHint(stage === EMPTY ? 'Уже полито — можно сажать' : 'Уже полито — растёт');
       garden.water(c);
       onEffect('watered', c);
     } else if (state.tool === 'basket') {
       if (stage === EMPTY) return onHint('Здесь пусто');
-      if (stage !== RIPE) return onHint(garden.isWatered(c) ? 'Ещё растёт' : 'Сначала полей');
+      if (stage !== RIPE) return onHint(garden.isWet(c) ? 'Ещё растёт' : 'Сначала полей');
       if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине у дома');
-      state.carried.push(garden.harvest(c));
+      const wilted = garden.cell(c).nights > 0;
+      state.carried.push({ type: garden.harvest(c), wilted });
       onEffect('harvested', c);
+      if (wilted) onHint('Вялый — отстоял ночь на страже, продастся за полцены');
     }
   }
 
@@ -81,9 +87,9 @@ export function createGame({ onHint, onEffect, onChange }) {
     const lockedBefore = PLANT_TYPES.filter((t) => !isUnlocked(t));
 
     let earned = 0;
-    for (const type of state.carried) {
-      earned += PLANTS[type].sellPrice;
-      state.harvested[type] = (state.harvested[type] || 0) + 1;
+    for (const item of state.carried) {
+      earned += priceOf(item);
+      state.harvested[item.type] = (state.harvested[item.type] || 0) + 1;
     }
     state.carried = [];
     state.coins += earned;
@@ -134,6 +140,19 @@ export function createGame({ onHint, onEffect, onChange }) {
       changed();
       return true;
     },
+    // Идёт дождь: случайные грядки намокают (уже мокрые — пропускаем)
+    rain(dt) {
+      rainCarry += WEATHER.wetCellsPerSecond * dt;
+      let wetted = false;
+      while (rainCarry >= 1) {
+        rainCarry--;
+        const cell = garden.cells[Math.floor(Math.random() * garden.cells.length)];
+        if (garden.isWet(cell)) continue;
+        garden.water(cell);
+        wetted = true;
+      }
+      if (wetted) changed();
+    },
     addCoins(n) {
       state.coins += n;
       changed();
@@ -155,9 +174,10 @@ export function createGame({ onHint, onEffect, onChange }) {
     // в корзинку для сбора, а если и она полна — засчитываем как проданный. Монеты — в большую корзину
     returnCrop(c, type, nights) {
       if (!garden.putBackRipe(c, type, nights)) {
-        if (state.carried.length < capacity()) state.carried.push(type);
+        const item = { type, wilted: nights > 0 };
+        if (state.carried.length < capacity()) state.carried.push(item);
         else {
-          state.coins += PLANTS[type].sellPrice;
+          state.coins += priceOf(item);
           state.harvested[type] = (state.harvested[type] || 0) + 1;
         }
       }
@@ -224,6 +244,7 @@ export function createGame({ onHint, onEffect, onChange }) {
             seedPrice: p.seedPrice,
             defense: p.defense,
             sellPrice: p.sellPrice,
+            wiltedPrice: priceOf({ type, wilted: true }),
             growSeconds: (p.stageSeconds * RIPE) / GROWTH_SPEED,
             owned: seedCount(type),
             condition: unlock && `собери ${countOf(unlock.plant, unlock.count)} (есть ${state.harvested[unlock.plant] || 0})`,
@@ -252,7 +273,11 @@ export function createGame({ onHint, onEffect, onChange }) {
       if (TOOL_IDS.includes(saved.tool)) state.tool = saved.tool;
       if (PLANTS[saved.selectedSeed]) state.selectedSeed = saved.selectedSeed;
       checkSelectedSeed();
-      state.carried = (Array.isArray(saved.carried) ? saved.carried : []).filter((t) => PLANTS[t]).slice(0, capacity());
+      // в старых сохранениях в корзинке просто названия растений: ['carrot', ...]
+      state.carried = (Array.isArray(saved.carried) ? saved.carried : [])
+        .map((item) => (typeof item === 'string' ? { type: item, wilted: false } : { type: item?.type, wilted: !!item?.wilted }))
+        .filter((item) => PLANTS[item.type])
+        .slice(0, capacity());
     },
   };
 }

@@ -75,10 +75,14 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
   window.addEventListener('resize', resize);
 
   // Сторож кадров: если кадр долгий — снижаем чёткость (не ниже 0.75), есть запас — возвращаем.
-  // Меряем реальное время между кадрами за 2 секунды.
+  // Меряем реальное время между кадрами за 2 секунды. Каждая смена чёткости — заметный рывок (все буферы картинки
+  // создаются заново), поэтому возвращаем осторожно: только после 3 быстрых замеров подряд (6 с)
+  // и не раньше чем через 30 с после снижения — иначе на быстрых экранах (120 Гц) чёткость скачет туда-сюда.
   let pixelRatio = renderer.getPixelRatio();
   let frames = 0;
   let windowStart = performance.now();
+  let fastWindows = 0;
+  let loweredAt = -Infinity;
   function watchdog(now) {
     frames++;
     const elapsed = now - windowStart;
@@ -88,8 +92,14 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
     windowStart = now;
     if (document.hidden || frameMs > 500) return; // вкладка в фоне — не считается
     let next = pixelRatio;
-    if (frameMs > 22) next = Math.max(0.75, pixelRatio - 0.25);          // медленнее ~45 кадров/с
-    else if (frameMs < 14) next = Math.min(quality.maxDpr, pixelRatio + 0.25); // быстрее ~70 кадров/с
+    fastWindows = frameMs < 14 ? fastWindows + 1 : 0;                     // быстрее ~70 кадров/с
+    if (frameMs > 22) {                                                   // медленнее ~45 кадров/с
+      next = Math.max(0.75, pixelRatio - 0.25);
+      if (next !== pixelRatio) loweredAt = now;
+    } else if (fastWindows >= 3 && now - loweredAt > 30000) {
+      next = Math.min(quality.maxDpr, pixelRatio + 0.25);
+      fastWindows = 0;
+    }
     if (next !== pixelRatio) {
       pixelRatio = next;
       renderer.setPixelRatio(pixelRatio);

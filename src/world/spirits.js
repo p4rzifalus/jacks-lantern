@@ -5,11 +5,12 @@
 // Что им можно и что пропадает, решают правила (night.js): здесь только движение.
 import * as THREE from 'three';
 import { SPIRITS, CELL_SIZE, BASKET_CELL, GARDEN_SIZE } from '../config.js';
-import { Sprite } from '../render/sprites.js';
+import { Sprite, LAYER, layerOffset } from '../render/sprites.js';
 import { getSheets } from './sheets.js';
 import { SPIRIT, PLANT_ORDER } from '../art/sprite-art.js';
 import { cellToWorld } from '../grid.js';
 import { unregisterSprite } from '../render/view-angle.js';
+import { patch as patchSkyReflex } from '../render/sky-reflex.js';
 
 const FPS = { move: 6, act: 8, carry: 6 };
 const RISE = 2.5;   // сколько секунд поднимается из тумана
@@ -85,10 +86,11 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
 
   function add(spirit) {
     const kind = spirit.kind;
-    const sprite = new Sprite(sheets.spirits, { castShadow: kind !== 'wisp' }); // блуждающий огонь сам светится — без тени
+    const sprite = new Sprite(sheets.spirits, { castShadow: kind !== 'wisp', layer: LAYER.spirit }); // блуждающий огонь сам светится — без тени
     sprite.mesh.material = sheets.spirits.material.clone(); // свой материал: бледнеет от ударов независимо от других
     sprite.mesh.material.transparent = true;
-    const loot = new Sprite(sheets.held, { castShadow: false });
+    patchSkyReflex(sprite.mesh.material); // отсвет неба, как у всех (копия его не переносит)
+    const loot = new Sprite(sheets.held, { castShadow: false, layer: LAYER.spirit });
     loot.mesh.visible = false;
     sprite.object.add(loot.mesh);
     scene.add(sprite.object);
@@ -150,7 +152,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       s.loot.setFrame(0, SPIRIT.rows_.coin);
       s.loot.mesh.scale.setScalar(0.5);
     }
-    s.loot.mesh.position.set(0, s.kind === 'skeleton' ? 0.55 : 0.5, 0.02);
+    s.loot.mesh.position.copy(layerOffset(LAYER.spirit)).add(new THREE.Vector3(0, s.kind === 'skeleton' ? 0.55 : 0.5, 0.02)); // перед духом
   }
 
   // Шаг по ряду к дому: до первого спелого растения, а если его нет — к корзинке
@@ -298,6 +300,8 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     },
     update,
     get count() { return list.length; },
+    // Где сейчас духи (для теней фонарей)
+    positions: () => list.map((s) => s.sprite.object.position),
     // Рассвет: все духи тают и опускаются в туман (с добычей — она уже не вернётся)
     dawn() {
       for (const s of list) {

@@ -19,7 +19,8 @@ function lanternLight(color, intensity, distance, castShadow, quality) {
     light.shadow.normalBias = 0.02;
     light.shadow.radius = 4;
     light.shadow.camera.near = 0.1;
-    light.shadow.autoUpdate = false; // фонари не двигаются — тени обновляем изредка (см. update)
+    light.shadow.camera.far = distance; // дальше свет не достаёт — и в тень рисуем только то, что рядом (иначе весь остров 6 раз)
+    light.shadow.autoUpdate = false; // фонари не двигаются — тени обновляем, только когда рядом кто-то ходит (см. update)
     light.shadow.needsUpdate = true;
   }
   return light;
@@ -112,7 +113,7 @@ export function createLanterns(scene, quality) {
     const light = lanternLight(color, intensity, distance, castShadow, quality);
     light.position.copy(position);
     scene.add(light);
-    lights.push({ light, base: intensity, phase: Math.random() * 10 });
+    lights.push({ light, base: intensity, phase: Math.random() * 10, shadowStale: true });
   };
 
   // Лампа у двери — первая, чтобы тень досталась ей
@@ -151,13 +152,20 @@ export function createLanterns(scene, quality) {
   return {
     // где висят фонари — для пылинок в их свете
     positions: lights.map((l) => l.light.position.clone()),
-    // Живой огонь: свет чуть подрагивает. Тени фонарей обновляются раз в 6 кадров (по очереди) —
-    // двигается только герой, а каждая такая тень — это 6 перерисовок сцены.
-    // lamps — горят ли фонари: 0 — погашены (день), 1 — горят (вечер и ночь)
-    update(time, lamps = 1) {
+    // Живой огонь: свет чуть подрагивает. Тень фонаря — это 6 перерисовок всего, что рядом с ним, поэтому обновляем её
+    // только когда фонарь горит и рядом кто-то ходит (раз в 3 кадра), да изредка — вдруг выросло растение.
+    // lamps — горят ли фонари: 0 — погашены (день), 1 — горят (вечер и ночь); movers — где сейчас герой и духи
+    update(time, lamps = 1, movers = []) {
       frame++;
+      const lit = lamps > 0.01;
       lights.forEach((l, i) => {
-        if (l.light.castShadow && (frame + i) % 6 === 0) l.light.shadow.needsUpdate = true;
+        if (!l.light.castShadow) return;
+        if (!lit) { l.shadowStale = true; return; } // днём тень не видна — обновим, когда зажжётся
+        const near = movers.some((p) => p.distanceTo(l.light.position) < l.light.distance + 0.5);
+        if (l.shadowStale || (near && (frame + i) % 3 === 0) || (frame + i) % 180 === 0) {
+          l.light.shadow.needsUpdate = true;
+          l.shadowStale = false;
+        }
       });
       for (const l of lights) {
         l.light.intensity = lamps * l.base * (0.92 + 0.05 * Math.sin(time * 7 + l.phase) + 0.03 * Math.sin(time * 13 + l.phase * 2));

@@ -19,7 +19,7 @@ import { createEffects } from './world/effects.js';
 import { createLanterns } from './world/lanterns.js';
 import { createFogSea } from './world/fog-sea.js';
 import { createLightRays } from './world/light-rays.js';
-import { applySkyReflex } from './render/sky-reflex.js';
+import { applySkyReflex, patch as patchSkyReflex } from './render/sky-reflex.js';
 import { createDevPanel, loadFxSettings } from './render/devpanel.js';
 import { loadGame, saveGame, clearSave, storeSave, packSave } from './save.js';
 import { createMenu } from './menu.js';
@@ -31,6 +31,8 @@ import { createNight, morningReport } from './night.js';
 import { createEmbers } from './world/embers.js';
 import { createAttacks } from './world/attacks.js';
 import { createSpirits } from './world/spirits.js';
+import { Sprite } from './render/sprites.js';
+import { getSheets } from './world/sheets.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -43,7 +45,7 @@ const fogSea = createFogSea(scene, quality, landmarks.island); // туман п�
 const lightRays = createLightRays(scene, quality, lighting); // рассветные лучи и лунное пятно
 const fx = loadFxSettings(quality);
 const pipeline = createPipeline(renderer, scene, camera, fx, quality);
-const daytime = createDaytime(); // часы суток: при каждом входе в игру — утро
+const daytime = createDaytime(); // часы суток: новая игра — с утра, дальше — с того же времени, что в сохранении
 const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, daytime }); // как выглядит время суток
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
@@ -201,17 +203,16 @@ if (saved) {
     hero.collide(world); // на случай, если огород поменялся
   }
 }
-if (saved?.view) {
-  cameraControl.setTurn(saved.view.turn || 0, hero.position);
-  cameraControl.toggleCloseUp(!!saved.view.closeUp);
-}
+if (saved?.view) cameraControl.setTurn(saved.view.turn || 0, hero.position);
+cameraControl.toggleCloseUp(saved?.view ? !!saved.view.closeUp : true); // новая игра — крупным планом
+if (Number.isFinite(saved?.daytime)) daytime.time = saved.daytime;
 cameraControl.centerOn(hero.position); // на телефоне сцена ближе — начинаем с героя
 refresh();
 
 // Обновить картинку и интерфейс по состоянию игры и сохранить — после любого изменения
 function refresh() {
   const { tool, selectedSeed, carried } = game.state;
-  hero.setHeld({ tool, seed: selectedSeed, carried });
+  hero.setHeld({ tool, seed: selectedSeed, carried: carried.map((item) => item.type) });
   basket.userData.fill.visible = game.hasHarvest();
   ui.render({ ...game.view(), closeUp: cameraControl.isCloseUp });
   save();
@@ -221,7 +222,7 @@ function refresh() {
 // Всё, что сохраняем (в браузер и в файл): огород, монеты, семена, где стоит герой, ракурс камеры
 function snapshot() {
   return { ...game.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
-    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp } };
+    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp }, daytime: daytime.time };
 }
 
 function save() {
@@ -242,7 +243,7 @@ function reloadIntoGame() {
 
 // Только для проверки (панель G): всё посаженное — сразу спелое
 function ripenAll() {
-  for (const cell of game.garden.cells) if (cell.plant) cell.wateredAt = 1;
+  for (const cell of game.garden.cells) if (cell.plant) cell.plantedAt = cell.wateredAt = 1;
   refresh();
 }
 
@@ -349,8 +350,45 @@ function placeOn(object, cell) {
   }
 }
 
+// Шейдеры — заранее, пока игра на стартовом экране. Иначе видеокарта готовит новую программу отрисовки прямо
+// посреди игры (в первую ночь, у первого духа, при первой атаке) — и картинка дёргается.
+// Рисуем по одному крошечному (невидимому глазу) образцу всего, что появляется только ночью, пару кадров — и убираем.
+function warmUpShaders() {
+  const sheets = getSheets();
+  const group = new THREE.Group();
+  group.scale.setScalar(1e-4);
+  const sprite = (sheet, options) => {
+    const s = new Sprite(sheet, { faceCamera: false, ...options });
+    group.add(s.object);
+    return s;
+  };
+  const spirit = sprite(sheets.spirits); // дух — со своим полупрозрачным материалом, как в world/spirits.js
+  spirit.mesh.material = sheets.spirits.material.clone();
+  spirit.mesh.material.transparent = true;
+  patchSkyReflex(spirit.mesh.material);
+  sprite(sheets.spirits, { castShadow: false }); // огонёк
+  sprite(sheets.held, { castShadow: false });    // добыча у духа
+  sprite(sheets.fx, { castShadow: false });      // искры и вспышки боя
+  const glowMap = new THREE.CanvasTexture(document.createElement('canvas')); // как у свечений: картинка из кода
+  const additive = { map: glowMap, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+  group.add(new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial(additive))); // свечение на земле (луч, кольцо спор)
+  group.add(new THREE.Sprite(new THREE.SpriteMaterial({ ...additive, fog: false })));            // свечение в тумане перед духом
+  for (const material of Object.values(gardenView.soil)) { // земля грядки: сухая, мокрая, со спелым урожаем
+    const tile = new THREE.Mesh(new THREE.BoxGeometry(), material);
+    tile.receiveShadow = true;
+    group.add(tile);
+  }
+  scene.add(group);
+  applySkyReflex(scene); // вставка неба — сразу, иначе шейдер соберётся ещё раз
+  let frames = 3;
+  return () => {
+    if (frames > 0 && --frames === 0) scene.remove(group);
+  };
+}
+
 // Отсвет неба и растворение в дымке — всем материалам (и новым, например растениям) раз в секунду
 applySkyReflex(scene);
+const warmUpTick = warmUpShaders();
 let frameCount = 0;
 
 let last = performance.now();
@@ -369,6 +407,7 @@ renderer.setAnimationLoop((now) => {
   weather.update(dt, decor.wind);
   if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
     daytime.update(dt);
+    if (weather.raining) game.rain(dt); // дождь мочит грядки
     night.update(dt);
     spirits.update(dt, now / 1000);
     attacks.update(dt);
@@ -382,6 +421,7 @@ renderer.setAnimationLoop((now) => {
     shownLamps = lamps;
     setLampLevel(lamps);
   }
+  gardenView.setShine(lamps); // мокрые грядки блестят при фонарях (каждый кадр: текстура могла догрузиться позже)
   decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);
@@ -394,12 +434,13 @@ renderer.setAnimationLoop((now) => {
     dark: lamps, // вечер и ночь: сверчки; ночь: сова и тихая музыка; утро и день: птицы
     night: nightDepth,
   });
-  lanterns.update(now / 1000, lamps);
+  lanterns.update(now / 1000, lamps, [hero.position, ...spirits.positions()]);
 
   placeOn(hoverFrame, input.hoverCell);
   placeOn(frontMarker, actionCell());
 
   pipeline.render(dt);
+  warmUpTick();
   devPanel?.tick(now);
 });
 

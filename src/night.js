@@ -139,8 +139,15 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     onMorning({ scared, lost, faded });
   }
 
+  // Духи приходят за урожаем: ряд — один из тех, где есть спелые растения (там их и встретит защита).
+  // Спелого нет нигде — любой ряд, и дух идёт прямо к корзинке
+  function pickRow() {
+    const rows = [...new Set(game.ripeCells().map((c) => c.x))];
+    return rows.length ? rows[Math.floor(Math.random() * rows.length)] : Math.floor(Math.random() * GARDEN_SIZE);
+  }
+
   function warn() {
-    warned = { row: Math.floor(Math.random() * GARDEN_SIZE), t: SPIRITS.warnSeconds };
+    warned = { row: pickRow(), t: SPIRITS.warnSeconds };
     onWarn?.(warned.row);
   }
 

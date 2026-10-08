@@ -1,7 +1,7 @@
 // Герой-огородник (енот или крот — скин): пиксельный спрайт с анимациями, ходит сам или по маршруту.
 import * as THREE from 'three';
 import { CELL_SIZE, HERO_SKIN, HERO_SPEED, HERO_TURN_SPEED, HERO_SCALE, HERO_REACH } from './config.js';
-import { Sprite, PX } from './render/sprites.js';
+import { Sprite, PX, LAYER, layerOffset } from './render/sprites.js';
 import { getSheets } from './world/sheets.js';
 import { HERO, PLANT_ORDER, TOOL_FRAMES, SEED_BAG_ROW } from './art/sprite-art.js';
 import { viewAngle } from './render/view-angle.js';
@@ -36,10 +36,12 @@ function turnTowards(current, target, maxStep) {
   return current + Math.max(-maxStep, Math.min(maxStep, diff));
 }
 
+const HERO_LAYER = layerOffset(LAYER.hero);
+
 export class Hero {
   constructor(skin = HERO_SKIN) {
     const sheets = getSheets();
-    this.sprite = new Sprite(sheets.hero[skin]);
+    this.sprite = new Sprite(sheets.hero[skin], { layer: LAYER.hero });
     this.skin = skin;
     this.object = new THREE.Group();
     this.object.add(this.sprite.object);
@@ -163,7 +165,7 @@ export class Hero {
     // предмет в лапах покачивается вместе с шагом
     const [hx, hy, hz] = HELD_OFFSET[dir];
     const bob = moving && frame % 3 === 0 ? -0.03 : 0;
-    this.hand.position.set(hx, hy + bob, hz);
+    this.hand.position.set(hx, hy + bob, hz).add(HERO_LAYER); // вместе с героем — в его слое
     this.hand.scale.x = dir === 'left' ? -1 : 1; // рисунки смотрят вправо (носик лейки), влево — зеркалим
   }
 
