@@ -1,5 +1,5 @@
 // Вид грядок: плитки земли и растения по стадиям. Читает состояние из GardenState.
-// Ночью спелые растения настораживаются, пока по огороду ходит дух, и замахиваются при ударе.
+// Сухие (отслужившие) — поникшие, бурые. Ночью спелые растения настораживаются, пока по огороду ходит дух, и замахиваются при ударе.
 import * as THREE from 'three';
 import { GARDEN_SIZE, CELL_SIZE, BASKET_CELL, PLANTS } from '../config.js';
 import { getMaterial, projectUV } from '../art/assets.js';
@@ -16,6 +16,7 @@ const LEAN = 0.35;
 // Блеск мокрой земли (шероховатость: 1 — матовая, меньше — блестит): днём на солнце почти матовая,
 // иначе одинаковые блики на всех грядках рябят; вечером и ночью влажно поблёскивает в свете фонарей
 const WET_SHINE = { day: 0.9, night: 0.5 };
+const WET_SKY_REFLECTION = 0.25; // сколько неба отражается в мокрой земле (1 — как в остальном мире)
 
 // У каждой грядки свой кусок текстуры (сдвиг и разворот на 180°), чтобы рисунок земли не повторялся клетка в клетку.
 // Борозды остаются в одну сторону
@@ -41,6 +42,9 @@ export class GardenView {
       ripe: getMaterial('soil', { tint: '#f0d4a8' }),
     };
     this.soil.wet.userData.skipWetness = true; // и так мокрая — дождь её блеск не трогает
+    // небо в мокрой земле почти не отражается: иначе ночью политые грядки синеют, а на закате розовеют.
+    // Блестит она от фонарей — тёплыми бликами
+    this.soil.wet.envMapIntensity = WET_SKY_REFLECTION;
     this.cells = [];
     for (let x = 0; x < GARDEN_SIZE; x++) {
       for (let z = 0; z < GARDEN_SIZE; z++) {
@@ -86,14 +90,16 @@ export class GardenView {
         view.strike = 0;
       }
       if (stage !== EMPTY) {
-        let col = stage;
+        const dry = stage === RIPE && this.garden.isDry(view, now); // отслужил своё — засох, на духов не смотрит
+        const guard = stage === RIPE && !dry;
+        let col = dry ? PLANT_FRAME.dry : stage;
         let [sx, sy] = [1, 1];
-        if (stage === RIPE && view.strike > 0) {
+        if (guard && view.strike > 0) {
           view.strike = Math.max(0, view.strike - dt);
           const windup = view.strike > STRIKE * 0.55;
           col = windup ? PLANT_FRAME.windup : PLANT_FRAME.strike;
           [sx, sy] = windup ? [1.08, 0.92] : [0.94, 1.1]; // присел — распрямился
-        } else if (stage === RIPE && alert) {
+        } else if (guard && alert) {
           const [first, count] = PLANT_FRAME.alert;
           col = first + (Math.floor(now / 400 + view.phase) % count);
         }
@@ -101,7 +107,7 @@ export class GardenView {
         view.plant.mesh.scale.set(sx, sy, 1);
         // наклон к ближайшему духу: чем ближе, тем сильнее; влево-вправо — как дух виден на экране
         let lean = 0;
-        if (stage === RIPE && right && spirits.length) {
+        if (guard && right && spirits.length) {
           const at = view.plant.object.position;
           const notice = PLANTS[cell.plant].attack.reach + NOTICE;
           let near = null;

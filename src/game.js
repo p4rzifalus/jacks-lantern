@@ -60,7 +60,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     const options = [];
     for (const [dx, dz] of NEIGHBORS) {
       const n = { x: c.x + dx, z: c.z + dz };
-      if (!isInGarden(n) || garden.stage(n) !== RIPE) continue;
+      if (!isInGarden(n) || !garden.isGuard(n)) continue;
       const other = garden.cell(n).plant;
       for (const h of HYBRIDS) {
         const [a, b] = PLANTS[h].hybrid;
@@ -99,10 +99,17 @@ export function createGame({ onHint, onEffect, onChange }) {
       if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине в центре огорода');
       const cell = garden.cell(c);
       const wilted = cell.nights > 0;
-      const hybrid = crossSeed(c, cell.plant);
-      state.carried.push({ type: garden.harvest(c), wilted });
+      const dry = garden.isDry(c);
+      const hybrid = dry ? null : crossSeed(c, cell.plant);
+      const type = garden.harvest(c);
+      state.carried.push({ type, wilted });
       onEffect('harvested', c);
-      if (hybrid) {
+      if (dry) {
+        const [min, max] = PLANTS[type].defense.seeds;
+        const seeds = isFree(type) ? 0 : min + Math.floor(Math.random() * (max - min + 1));
+        if (seeds) state.seeds[type] = (state.seeds[type] || 0) + seeds;
+        onHint(`Сухой — продастся за полцены${seeds ? `, +${plural(seeds, ['семя', 'семени', 'семян'])}` : ''}`);
+      } else if (hybrid) {
         const first = !state.discovered.includes(hybrid);
         if (first) state.discovered.push(hybrid);
         state.seeds[hybrid] = (state.seeds[hybrid] || 0) + 1;
@@ -192,11 +199,11 @@ export function createGame({ onHint, onEffect, onChange }) {
     // ---------- Ночь: духи уносят добро (решает night.js) ----------
     // Спелые грядки — куда могут прийти духи
     ripeCells() {
-      return garden.cells.filter((cell) => garden.stage(cell) === RIPE).map(({ x, z }) => ({ x, z }));
+      return garden.cells.filter((cell) => garden.isGuard(cell)).map(({ x, z }) => ({ x, z }));
     },
     // Унести спелый урожай с грядки. Возвращает, что унесли, или null (уже собрали)
     stealCrop(c) {
-      if (garden.stage(c) !== RIPE) return null;
+      if (!garden.isGuard(c)) return null;
       const type = garden.harvest(c);
       changed();
       return type;
@@ -230,20 +237,14 @@ export function createGame({ onHint, onEffect, onChange }) {
       changed();
     },
 
-    // Утро: каждое спелое растение отслужило ещё одну ночь. Кто отслужил своё — отцветает и оставляет семена.
-    // Возвращает, что отцвело: [{ type, seeds }]
+    // Утро: каждое растение на страже отслужило ещё одну ночь. Кто отслужил своё — засыхает на грядке
+    // (собирается за полцены, семена — при сборе). Возвращает, что засохло: [type, ...]
     endOfNight() {
       const faded = [];
       for (const cell of garden.cells) {
-        if (garden.stage(cell) !== RIPE) continue;
+        if (!garden.isGuard(cell)) continue;
         cell.nights = (cell.nights || 0) + 1;
-        const d = PLANTS[cell.plant].defense;
-        if (cell.nights < d.nights) continue;
-        const type = garden.harvest(cell);
-        const [min, max] = d.seeds;
-        const seeds = isFree(type) ? 0 : min + Math.floor(Math.random() * (max - min + 1));
-        if (seeds) state.seeds[type] = (state.seeds[type] || 0) + seeds;
-        faded.push({ type, seeds });
+        if (garden.isDry(cell)) faded.push(cell.plant);
       }
       changed();
       return faded;
@@ -296,10 +297,10 @@ export function createGame({ onHint, onEffect, onChange }) {
     crossPairs() {
       const pairs = [];
       for (const c of garden.cells) {
-        if (garden.stage(c) !== RIPE) continue;
+        if (!garden.isGuard(c)) continue;
         for (const [dx, dz] of [[1, 0], [0, 1]]) { // вправо и вниз — каждая пара по разу
           const n = { x: c.x + dx, z: c.z + dz };
-          if (!isInGarden(n) || garden.stage(n) !== RIPE) continue;
+          if (!isInGarden(n) || !garden.isGuard(n)) continue;
           const other = garden.cell(n).plant;
           const match = HYBRIDS.some((h) => {
             const [a, b] = PLANTS[h].hybrid;

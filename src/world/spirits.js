@@ -216,7 +216,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       }
       const speed = SPIRITS.kinds[s.kind].speed;
       // чем меньше смелости, тем бледнее и сильнее дрожит
-      const bold = Math.max(0, s.spirit.courage) / SPIRITS.kinds[s.kind].courage;
+      const bold = Math.max(0, s.spirit.courage) / s.spirit.maxCourage;
       const tremble = s.state === 'flee' ? 1 : 1 - bold;
       const shake = Math.sin(time * 40 + s.phase) * (0.035 * tremble + 0.06 * s.flinch);
       const pale = s.state === 'flee' || s.state === 'sink' ? 0.5 : 0.45 + 0.55 * bold;

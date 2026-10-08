@@ -47,6 +47,18 @@ export class GardenState {
     return Math.max(0, Math.min(RIPE, Math.floor((now - from) / stageMs))); // часы устройства могли отставать — не меньше 0
   }
 
+  // Сухое: спелое растение, которое отслужило на страже все свои ночи (PLANTS → defense → nights).
+  // Стоит на грядке, ночью не защищает и духам не нужно; собирается за полцены и даёт семена
+  isDry(c, now = Date.now()) {
+    const cell = this.cell(c);
+    return this.stage(c, now) === RIPE && cell.nights >= PLANTS[cell.plant].defense.nights;
+  }
+
+  // Спелое и живое — стоит ночью на страже
+  isGuard(c, now = Date.now()) {
+    return this.stage(c, now) === RIPE && !this.isDry(c, now);
+  }
+
   plant(c, type) {
     Object.assign(this.cell(c), { plant: type, plantedAt: Date.now(), nights: 0 }); // вода в земле остаётся
   }

@@ -1,5 +1,5 @@
 // Огоньки на земле: остаются от прогнанных духов, висят в воздухе и мерцают.
-// Енот подбирает огонёк, проходя рядом; на рассвете несобранные сами улетают в счётчик — ничего не теряется.
+// Енот подбирает огонёк, проходя рядом (если енот недалеко — огонёк сам подлетает к нему); на рассвете несобранные сами улетают в счётчик — ничего не теряется.
 import * as THREE from 'three';
 import { SPIRITS, CELL_SIZE } from '../config.js';
 import { Sprite, LAYER } from '../render/sprites.js';
@@ -48,9 +48,19 @@ export function createEmbers(scene, { onCollect }) {
           continue;
         }
         pos.y = 0.35 + Math.sin(time * 2 + e.phase) * 0.08; // покачивается
-        if (heroPosition && Math.hypot(heroPosition.x - pos.x, heroPosition.z - pos.z) < SPIRITS.emberReach * CELL_SIZE) {
+        if (!heroPosition) continue;
+        const dx = heroPosition.x - pos.x;
+        const dz = heroPosition.z - pos.z;
+        const d = Math.hypot(dx, dz) / CELL_SIZE;
+        if (d < SPIRITS.emberReach) {
           onCollect(pos.clone());
           remove(e);
+        } else if (d < SPIRITS.emberPull) {
+          // подлетает: у края — медленно, ближе к еноту — всё быстрее
+          const near = 1 - d / SPIRITS.emberPull;
+          const step = Math.min(d, SPIRITS.emberPullSpeed * (0.4 + 2 * near) * dt) * CELL_SIZE;
+          pos.x += (dx / (d * CELL_SIZE)) * step;
+          pos.z += (dz / (d * CELL_SIZE)) * step;
         }
       }
     },

@@ -3,7 +3,7 @@
 // Координаты — в клетках огорода (дробные числа); корзина — в центральной клетке (BASKET_CELL).
 // Как духи выглядят и двигаются — world/spirits.js. Числа — config.js → SPIRITS, NIGHTS, LANTERN.
 // Набеги идут только во время игры: часы суток стоят, пока игра закрыта или открыто меню.
-import { SPIRITS, PLANTS, GARDEN_SIZE, NIGHTS, NIGHT_GROWTH, LANTERN, DAY_CYCLE } from './config.js';
+import { SPIRITS, PLANTS, GARDEN_SIZE, NIGHTS, NIGHT_GROWTH, NIGHT_SCALING, LANTERN, DAY_CYCLE } from './config.js';
 import { countOf } from './game.js';
 import { plural } from './text.js';
 
@@ -55,8 +55,13 @@ const onField = (s) => s.at && !s.fled && s.courage > 0
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
-// «1 семя», «2 семени», «5 семян»
-const seedsOf = (n) => plural(n, ['семя', 'семени', 'семян']);
+// «морковь ×2, редис — собери за полцены»
+function drySummary(types) {
+  const counts = {};
+  for (const t of types) counts[t] = (counts[t] || 0) + 1;
+  const list = Object.entries(counts).map(([t, n]) => `${PLANTS[t].name.toLowerCase()}${n > 1 ? ` ×${n}` : ''}`);
+  return `${list.join(', ')} — собери за полцены`;
+}
 
 // Итог ночи для утреннего окна: строки [подпись, значение]; null — ночь прошла тихо, показывать нечего
 export function morningReport({ scared, lost, faded }) {
@@ -68,7 +73,7 @@ export function morningReport({ scared, lost, faded }) {
     ['Огоньков', `+${scared}`],
     ['Унесли', gone.length ? gone.join(', ') : 'ничего'],
   ];
-  if (faded.length) rows.push(['Отцвели', faded.map((f) => `${PLANTS[f.type].name.toLowerCase()}${f.seeds ? ` (+${seedsOf(f.seeds)})` : ''}`).join(', ')]);
+  if (faded.length) rows.push(['Засохли', drySummary(faded)]);
   return rows;
 }
 
@@ -81,6 +86,7 @@ export function morningReport({ scared, lost, faded }) {
 // onMorning(summary) — ночь кончилась: { scared, lost, faded } (строки для окна — morningReport)
 export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, onStolen, onMorning }) {
   let active = false;
+  let bravery = 1;    // во сколько раз духи этой ночи смелее обычного (NIGHT_SCALING)
   let plan = null;     // какая ночь: сколько духов, каких, с каких сторон, сколькими волнами
   let queue = [];      // кто ещё придёт: [{ at — секунд от начала ночи, kind, from }]
   let clock = 0;       // секунд с начала ночи
@@ -172,6 +178,11 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     reset();
     clock = 0;
     plan = nightPlan(game.state.nightsSeen);
+    // сильный огород зовёт больше духов и смелее (config.js → NIGHT_SCALING)
+    const guards = game.ripeCells().length;
+    const extra = Math.min(NIGHT_SCALING.maxExtra, Math.floor(guards / NIGHT_SCALING.plantsPerSpirit));
+    bravery = Math.min(NIGHT_SCALING.maxCourage, 1 + guards * NIGHT_SCALING.couragePerPlant);
+    plan = { ...plan, spirits: plan.spirits + extra };
     const sides = SIDES.slice(0, plan.sides);
     const nightSeconds = (DAY_CYCLE.phases.find((p) => p.id === 'night').minutes * 60) / DAY_CYCLE.speed;
     const gap = (nightSeconds * SPIRITS.spread - SPIRITS.firstDelay) / plan.spirits;
@@ -192,7 +203,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     warned = [];
     spirits = [];
     game.nightPassed(); // следующая ночь — по следующей строке NIGHTS
-    const faded = game.endOfNight(); // защитники отслужили ещё ночь; кто своё отслужил — отцвёл
+    const faded = game.endOfNight(); // защитники отслужили ещё ночь; кто своё отслужил — засох
     onMorning({ scared, lost, faded });
   }
 
@@ -203,7 +214,8 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
 
   function spawn(kind, from) {
     const k = SPIRITS.kinds[kind];
-    const spirit = { id: nextId++, kind, name: k.name, from, courage: k.courage, at: null, hitBy: null, target: null, loot: null, fled: false };
+    const courage = k.courage * bravery;
+    const spirit = { id: nextId++, kind, name: k.name, from, courage, maxCourage: courage, at: null, hitBy: null, target: null, loot: null, fled: false };
     spirits.push(spirit);
     onSpawn(spirit);
   }

@@ -368,7 +368,7 @@ window.addEventListener('keydown', (e) => {
 // Где растут спелые светящиеся грибы — над ними поднимаются споры
 function ripeMushrooms() {
   return game.garden.cells
-    .filter((c) => c.plant === 'mushroom' && game.garden.stage(c) === RIPE)
+    .filter((c) => c.plant === 'mushroom' && game.garden.isGuard(c))
     .map((c) => cellToWorld(c.x, c.z));
 }
 

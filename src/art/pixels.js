@@ -16,13 +16,15 @@ export class PixelSheet {
   }
 
   // Рисовалка одного кадра: координаты внутри кадра, flip — зеркально по горизонтали
-  frame(col, row, frameW, frameH, flip = false) {
+  // remap(x, y, color, glow) → [x, y, color, glow] — перерисовать каждый пиксель по-своему (например, засушить растение)
+  frame(col, row, frameW, frameH, flip = false, remap = null) {
     const ox = col * frameW;
     const oy = row * frameH;
     const sheet = this;
     sheet.frameW = frameW; // размер кадра — чтобы светотень и контур не переходили в соседний кадр
     sheet.frameH = frameH;
     const put = (x, y, color, glow) => {
+      if (remap && color) [x, y, color, glow] = remap(x, y, typeof color === 'string' ? hex(color) : color, glow);
       x = Math.round(x);
       y = Math.round(y);
       if (x < 0 || y < 0 || x >= frameW || y >= frameH) return;

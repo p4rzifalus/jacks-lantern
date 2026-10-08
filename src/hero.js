@@ -24,6 +24,12 @@ const HELD_OFFSET = {
   down: [0, 0.2, 0.03], left: [-0.22, 0.2, 0.03], right: [0.22, 0.2, 0.03], up: [0, 0.22, -0.03],
 };
 
+const BLOCKED_SECONDS = 0.4; // сколько можно упираться в край по маршруту, прежде чем бросить эту точку
+
+// Фонарь: висит сбоку, по глубине — между героем и предметом в лапах: [x, z]
+const LANTERN_OFFSET = { down: [0.3, 0.015], left: [0.2, 0.015], right: [-0.2, 0.015], up: [0.3, -0.015] };
+const LANTERN_SCALE = 0.8;
+
 // Собранные овощи в корзинке: уменьшенные спрайты урожая, выглядывают над плетёным боком.
 // Места — в пикселях от низа-середины корзинки; третий и дальше — видно только первые три
 const CROP_SCALE = 0.55;
@@ -83,9 +89,11 @@ export class Hero {
     this.lantern = new Sprite(sheets.tools, { faceCamera: false, castShadow: false });
     this.lantern.setFrame(...TOOL_FRAMES.lantern);
     this.lantern.mesh.visible = false;
+    this.lantern.mesh.scale.setScalar(LANTERN_SCALE);
     this.sprite.object.add(this.lantern.mesh);
-    this.lanternLight = new THREE.PointLight(LANTERN.color, 0, LANTERN.radius * CELL_SIZE * 2.2, 2);
-    this.lanternLight.position.set(0, 0.6, 0);
+    // свет — над головой: вплотную к спрайту он выжигал на еноте белое пятно
+    this.lanternLight = new THREE.PointLight(LANTERN.color, 0, LANTERN.radius * CELL_SIZE * 2.6, 1.6);
+    this.lanternLight.position.set(0, 1.3, 0);
     this.ring = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: lanternRingTexture(), color: LANTERN.color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -101,6 +109,7 @@ export class Hero {
     this.targetHeading = 0;  // куда хочет повернуться
     this.walkTime = 0;
     this.path = [];          // точки маршрута после клика
+    this.blocked = 0;        // сколько секунд герой упирается в край, идя по маршруту
     this.faceTo = null;      // куда повернуться в конце маршрута
     this.onArrive = null;
   }
@@ -181,9 +190,19 @@ export class Hero {
 
     const moving = move.lengthSq() > 1e-8;
     if (moving) {
+      const before = this.position.clone();
       this.position.add(move);
       this.collide(world);
       this.targetHeading = Math.atan2(move.x, move.z);
+      // Точка маршрута за краем дорожки или в корзине: герой упирается и бежит на месте.
+      // Не продвигается дольше BLOCKED_SECONDS — считаем, что дошёл, насколько можно
+      const progressed = this.position.distanceTo(before) > move.length() * 0.3;
+      this.blocked = keyDir.lengthSq() > 0 || progressed ? 0 : this.blocked + dt;
+      if (this.blocked > BLOCKED_SECONDS && this.path.length) {
+        this.blocked = 0;
+        this.path.shift();
+        if (!this.path.length) this.arrive();
+      }
     }
 
     this.heading = turnTowards(this.heading, this.targetHeading, HERO_TURN_SPEED * dt);
@@ -208,7 +227,9 @@ export class Hero {
     const bob = moving && frame % 3 === 0 ? -0.03 : 0;
     this.hand.position.set(hx, hy + bob, hz).add(HERO_LAYER); // вместе с героем — в его слое
     // фонарь — с другой стороны от предмета в лапах, чуть покачивается на ходу
-    this.lantern.mesh.position.set(dir === 'right' ? -0.24 : 0.24, 0.12 + bob * 0.5, dir === 'up' ? -0.03 : 0.03).add(HERO_LAYER);
+    // по глубине — между героем и предметом в лапах (иначе они с предметом на одной глубине и мерцают, перекрывая друг друга)
+    const [lx, lz] = LANTERN_OFFSET[dir];
+    this.lantern.mesh.position.set(lx, 0.1 + bob * 0.5, lz).add(HERO_LAYER);
     this.lantern.mesh.rotation.z = moving ? Math.sin(this.animTime * 9) * 0.15 : 0;
     this.hand.scale.x = dir === 'left' ? -1 : 1; // рисунки смотрят вправо (носик лейки), влево — зеркалим
   }

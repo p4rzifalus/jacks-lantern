@@ -293,7 +293,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, o
         }
         const info = `рост ${formatTime(row.growSeconds)} · урожай ${row.sellPrice} мон.`;
         const d = row.defense;
-        const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${plural(d.nights, ['ночь', 'ночи', 'ночей'])}${d.nights > 1 ? `, после ночи на страже — вялый, урожай ${row.wiltedPrice} мон.` : ''}</div>`;
+        const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${plural(d.nights, ['ночь', 'ночи', 'ночей'])}, потом засыхает · после ночи на страже урожай ${row.wiltedPrice} мон.</div>`;
         if (row.seedPrice === 0) {
           return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
         }

@@ -19,7 +19,11 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
   const screenRight = new THREE.Vector3();
   const worldUp = new THREE.Vector3(0, 1, 0);
 
+  // Отпускание клавиши иногда теряется: на Mac, пока зажат Cmd, браузер не сообщает об отпускании других клавиш;
+  // переключились в другое окно, открылось контекстное меню. Тогда герой бежал бы сам — сбрасываем всё, что зажато
+  const releaseAll = () => pressed.clear();
   window.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey) return releaseAll(); // сочетания с Cmd/Ctrl — не ходьба
     if (!input.enabled) return; // открыто меню
     if (MOVE_KEYS[e.code]) {
       pressed.add(MOVE_KEYS[e.code]);
@@ -31,8 +35,13 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
       handlers.onTool?.(Number(e.code.slice(5)));
     }
   });
-  window.addEventListener('keyup', (e) => pressed.delete(MOVE_KEYS[e.code]));
-  window.addEventListener('blur', () => pressed.clear());
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Meta' || e.key === 'Control') releaseAll();
+    else pressed.delete(MOVE_KEYS[e.code]);
+  });
+  window.addEventListener('blur', releaseAll);
+  window.addEventListener('contextmenu', releaseAll);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 
   // Какая клетка огорода (или кликабельный объект) под указателем, иначе null
   const raycaster = new THREE.Raycaster();
@@ -63,7 +72,10 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
       screenUp.setY(0).normalize();
       screenRight.crossVectors(screenUp, worldUp);
       const dir = new THREE.Vector3();
-      if (!input.enabled) return dir;
+      if (!input.enabled) {
+        releaseAll(); // открыто меню — после него герой не должен уйти сам
+        return dir;
+      }
       if (pressed.has('up')) dir.add(screenUp);
       if (pressed.has('down')) dir.sub(screenUp);
       if (pressed.has('right')) dir.add(screenRight);
