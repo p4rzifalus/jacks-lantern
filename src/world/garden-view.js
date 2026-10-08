@@ -1,7 +1,7 @@
 // Вид грядок: плитки земли и растения по стадиям. Читает состояние из GardenState.
 // Ночью спелые растения настораживаются, пока по огороду ходит дух, и замахиваются при ударе.
 import * as THREE from 'three';
-import { GARDEN_SIZE, CELL_SIZE } from '../config.js';
+import { GARDEN_SIZE, CELL_SIZE, BASKET_CELL, PLANTS } from '../config.js';
 import { getMaterial, projectUV } from '../art/assets.js';
 import { cellToWorld } from '../grid.js';
 import { EMPTY, RIPE } from '../garden.js';
@@ -10,6 +10,9 @@ import { getSheets } from './sheets.js';
 import { PLANT_ORDER, PLANT_FRAME } from '../art/sprite-art.js';
 
 const STRIKE = 0.4; // сколько длится удар: первая половина — замах, вторая — сам удар
+// Спелое растение тянется к ближайшему духу: замечает его за столько клеток сверх своей атаки, наклон — до LEAN радиан
+const NOTICE = 1.5;
+const LEAN = 0.35;
 // Блеск мокрой земли (шероховатость: 1 — матовая, меньше — блестит): днём на солнце почти матовая,
 // иначе одинаковые блики на всех грядках рябят; вечером и ночью влажно поблёскивает в свете фонарей
 const WET_SHINE = { day: 0.9, night: 0.5 };
@@ -41,6 +44,7 @@ export class GardenView {
     this.cells = [];
     for (let x = 0; x < GARDEN_SIZE; x++) {
       for (let z = 0; z < GARDEN_SIZE; z++) {
+        if (x === BASKET_CELL.x && z === BASKET_CELL.z) continue; // в центре — большая корзина, не грядка
         const p = cellToWorld(x, z);
         const tileGeo = varyTopUV(projectUV(new THREE.BoxGeometry(CELL_SIZE * 0.92, 0.04, CELL_SIZE * 0.92), this.soil.dry.userData.units));
         const tile = new THREE.Mesh(tileGeo, this.soil.dry);
@@ -53,7 +57,7 @@ export class GardenView {
         plant.object.visible = false;
         scene.add(plant.object);
 
-        this.cells.push({ x, z, tile, plant, shownStage: null, shownType: null, strike: 0, phase: Math.random() * 2 });
+        this.cells.push({ x, z, tile, plant, shownStage: null, shownType: null, strike: 0, lean: 0, phase: Math.random() * 2 });
       }
     }
   }
@@ -69,8 +73,9 @@ export class GardenView {
     if (view) view.strike = STRIKE;
   }
 
-  // Каждый кадр: обновить вид клеток. alert — по огороду ходит дух: спелые растения настороже
-  update(now = Date.now(), dt = 0, alert = false) {
+  // Каждый кадр: обновить вид клеток. alert — по огороду ходит дух: спелые растения настороже;
+  // spirits — где духи (точки сцены), right — направление «вправо» на экране (спелые тянутся к ближайшему духу)
+  update(now = Date.now(), dt = 0, alert = false, spirits = [], right = null) {
     for (const view of this.cells) {
       const cell = this.garden.cell(view);
       const stage = this.garden.stage(view, now);
@@ -94,6 +99,24 @@ export class GardenView {
         }
         view.plant.setFrame(col, PLANT_ORDER.indexOf(cell.plant));
         view.plant.mesh.scale.set(sx, sy, 1);
+        // наклон к ближайшему духу: чем ближе, тем сильнее; влево-вправо — как дух виден на экране
+        let lean = 0;
+        if (stage === RIPE && right && spirits.length) {
+          const at = view.plant.object.position;
+          const notice = PLANTS[cell.plant].attack.reach + NOTICE;
+          let near = null;
+          let nearD = Infinity;
+          for (const p of spirits) {
+            const d = Math.hypot(p.x - at.x, p.z - at.z) / CELL_SIZE;
+            if (d < nearD) { near = p; nearD = d; }
+          }
+          if (near && nearD < notice) {
+            const side = ((near.x - at.x) * right.x + (near.z - at.z) * right.z) / Math.max(0.5, nearD * CELL_SIZE);
+            lean = -LEAN * side * Math.min(1, 1.6 * (1 - nearD / notice)) + Math.sin(now / 160 + view.phase * 3) * 0.04; // и подрагивает
+          }
+        }
+        view.lean += (lean - view.lean) * Math.min(1, dt * 6);
+        view.plant.mesh.rotation.z = view.lean;
       }
 
       // Земля: тёмная, пока мокрая (полили или намочил дождь); светлая, когда урожай готов

@@ -1,6 +1,6 @@
 // Герой-огородник (енот или крот — скин): пиксельный спрайт с анимациями, ходит сам или по маршруту.
 import * as THREE from 'three';
-import { CELL_SIZE, HERO_SKIN, HERO_SPEED, HERO_TURN_SPEED, HERO_SCALE, HERO_REACH } from './config.js';
+import { CELL_SIZE, HERO_SKIN, HERO_SPEED, HERO_TURN_SPEED, HERO_SCALE, HERO_REACH, LANTERN } from './config.js';
 import { Sprite, PX, LAYER, layerOffset } from './render/sprites.js';
 import { getSheets } from './world/sheets.js';
 import { HERO, PLANT_ORDER, TOOL_FRAMES, SEED_BAG_ROW } from './art/sprite-art.js';
@@ -28,6 +28,22 @@ const HELD_OFFSET = {
 // Места — в пикселях от низа-середины корзинки; третий и дальше — видно только первые три
 const CROP_SCALE = 0.55;
 const CROP_SPOTS = [[-3, 5.5], [3, 6], [0, 7.5]];
+
+// Круг света фонаря на земле: ровная тёплая заливка и ярче к краю — видно, докуда достаёт свет
+function lanternRingTexture() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.7, 'rgba(255,255,255,0.3)');
+  g.addColorStop(0.9, 'rgba(255,255,255,0.75)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
 
 // Поворот на кратчайший угол
 function turnTowards(current, target, maxStep) {
@@ -61,6 +77,23 @@ export class Hero {
     this.basketFront.setFrame(...TOOL_FRAMES.basketFront);
     this.basketFront.mesh.position.z = 0.01;
     this.hand.add(this.toolSprite.mesh, this.basketFront.mesh);
+
+    // Фонарь: ночью висит сбоку, светит вокруг (свет и круг на земле — с самого начала, днём погашены,
+    // чтобы при зажигании ничего не пересобиралось)
+    this.lantern = new Sprite(sheets.tools, { faceCamera: false, castShadow: false });
+    this.lantern.setFrame(...TOOL_FRAMES.lantern);
+    this.lantern.mesh.visible = false;
+    this.sprite.object.add(this.lantern.mesh);
+    this.lanternLight = new THREE.PointLight(LANTERN.color, 0, LANTERN.radius * CELL_SIZE * 2.2, 2);
+    this.lanternLight.position.set(0, 0.6, 0);
+    this.ring = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: lanternRingTexture(), color: LANTERN.color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    this.ring.scale.setScalar(LANTERN.radius * CELL_SIZE);
+    this.ring.position.y = 0.05;
+    this.object.add(this.lanternLight, this.ring);
+    this.lanternLevel = 0;
     this.object.scale.setScalar(HERO_SCALE);
     this.actTime = 0;         // сколько ещё показывать «действие»
     this.animTime = 0;
@@ -94,6 +127,14 @@ export class Hero {
       crop.mesh.visible = !!type;
       if (type) crop.setFrame(PLANT_ORDER.indexOf(type), 0);
     });
+  }
+
+  // Фонарь: level 0 — погашен (день), 1 — горит (ночь)
+  setLantern(level) {
+    this.lanternLevel = level;
+    this.lanternLight.intensity = LANTERN.intensity * level;
+    this.ring.material.opacity = LANTERN.ring * level * (0.9 + 0.1 * Math.sin(performance.now() / 180)); // чуть дышит, как огонь
+    this.lantern.mesh.visible = level > 0.05;
   }
 
   // Показать короткое движение «сажаю / поливаю / собираю»
@@ -166,6 +207,9 @@ export class Hero {
     const [hx, hy, hz] = HELD_OFFSET[dir];
     const bob = moving && frame % 3 === 0 ? -0.03 : 0;
     this.hand.position.set(hx, hy + bob, hz).add(HERO_LAYER); // вместе с героем — в его слое
+    // фонарь — с другой стороны от предмета в лапах, чуть покачивается на ходу
+    this.lantern.mesh.position.set(dir === 'right' ? -0.24 : 0.24, 0.12 + bob * 0.5, dir === 'up' ? -0.03 : 0.03).add(HERO_LAYER);
+    this.lantern.mesh.rotation.z = moving ? Math.sin(this.animTime * 9) * 0.15 : 0;
     this.hand.scale.x = dir === 'left' ? -1 : 1; // рисунки смотрят вправо (носик лейки), влево — зеркалим
   }
 

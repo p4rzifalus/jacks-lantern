@@ -17,6 +17,11 @@ export function worldToCell(pos) {
   };
 }
 
+// Где точка сцены в клетках, без округления (дробные числа) — для расстояний
+export function cellCoords(pos) {
+  return { x: pos.x / CELL_SIZE + OFFSET, z: pos.z / CELL_SIZE + OFFSET };
+}
+
 export function isInGarden(c) {
   return c.x >= 0 && c.x < GARDEN_SIZE && c.z >= 0 && c.z < GARDEN_SIZE;
 }

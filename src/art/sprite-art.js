@@ -578,8 +578,8 @@ export function drawHeldSheet() {
 // Кадр 16×16. Строка 0: лейка, корзинка сзади (ручка и тёмное нутро), корзинка спереди (плетёный бок).
 // Между задом и передом корзинки рисуются собранные овощи из листа урожая — так они «сидят» внутри.
 // Строка 1: мешочек с семенами, по колонке на растение (в порядке PLANT_ORDER) — метка цвета растения.
-export const TOOL_FRAME = { frameW: 16, frameH: 16, cols: Math.max(3, PLANT_ORDER.length) };
-export const TOOL_FRAMES = { water: [0, 0], basket: [1, 0], basketFront: [2, 0] }; // [колонка, строка]; water и basket — по инструменту
+export const TOOL_FRAME = { frameW: 16, frameH: 16, cols: Math.max(4, PLANT_ORDER.length) };
+export const TOOL_FRAMES = { water: [0, 0], basket: [1, 0], basketFront: [2, 0], lantern: [3, 0] }; // [колонка, строка]; water и basket — по инструменту
 export const SEED_BAG_ROW = 1;
 
 const SEED_LABEL = {
@@ -607,6 +607,19 @@ function drawBasketBack(d) {
   d.ellipse(7.5, 8, 5.5, 1.5, C.basketInside);
 }
 
+// Фонарь енота (ночью висит у него сбоку): дужка, рамка, светящееся стекло
+function drawLantern(d) {
+  d.line(6, 2, 9, 2, C.wateringCanDark);   // дужка
+  d.px(5, 3, C.wateringCanDark);
+  d.px(10, 3, C.wateringCanDark);
+  d.rect(5, 4, 6, 1, C.wateringCanDark);   // крышка
+  d.rect(5, 5, 6, 7, '#ffd27a', true);     // стекло светится
+  d.rect(7, 6, 2, 4, '#fff4c8', true);     // огонёк
+  d.line(5, 5, 5, 11, C.wateringCanDark);  // рамка
+  d.line(10, 5, 10, 11, C.wateringCanDark);
+  d.rect(5, 12, 6, 1, C.wateringCanDark);  // донышко
+}
+
 function drawBasketFront(d) {
   d.rect(2, 9, 12, 4, C.basket);
   d.rect(3, 13, 10, 2, C.basket);
@@ -629,6 +642,7 @@ export function drawToolSheet() {
   drawCan(sheet.frame(...TOOL_FRAMES.water, frameW, frameH));
   drawBasketBack(sheet.frame(...TOOL_FRAMES.basket, frameW, frameH));
   drawBasketFront(sheet.frame(...TOOL_FRAMES.basketFront, frameW, frameH));
+  drawLantern(sheet.frame(...TOOL_FRAMES.lantern, frameW, frameH));
   PLANT_ORDER.forEach((type, col) => drawSeedBag(sheet.frame(col, SEED_BAG_ROW, frameW, frameH), artOf(SEED_LABEL, type) || C.seed));
   return sheet.finish();
 }

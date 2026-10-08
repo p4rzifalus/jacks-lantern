@@ -1,6 +1,6 @@
-// Духи — как выглядят и двигаются: у дальнего края огорода в тумане проступает свечение, из него поднимается дух
-// и медленно идёт по своему ряду к дому (скелет — пешком, остальные летят). У первого спелого растения
-// останавливается и тянет его; утащил — уходит с ним обратно в туман. Прошёл ряд — сворачивает к корзинке.
+// Духи — как выглядят и двигаются: в тумане у края острова проступает свечение, из него поднимается дух
+// и медленно идёт к ближайшему спелому растению (скелет — пешком, остальные летят), а если спелого нет — к корзине
+// в центре огорода. Дотянул — уходит с добычей обратно в туман, туда же, откуда пришёл.
 // От ударов растений дух вздрагивает и бледнеет, а испугавшись — роняет добычу и быстро улетает. На рассвете тают.
 // Что им можно и что пропадает, решают правила (night.js): здесь только движение.
 import * as THREE from 'three';
@@ -40,30 +40,45 @@ function glowTexture() {
 
 // island — прямоугольник острова; night — правила ночи; hooks — звуки и эффекты
 export function createSpirits(scene, camera, island, night, hooks = {}) {
-  const farZ = island.maxZ + 1.2; // откуда приходят и куда уходят: туман за дальним краем острова
+  const FOG = 1.2; // насколько за краем острова, в тумане, духи поднимаются и куда уходят
   const sheets = getSheets();
   const list = [];
   const glows = [];
   const right = new THREE.Vector3();
   const glowMap = glowTexture();
 
-  const rowX = (row) => cellToWorld(row, 0).x;
-  const fogPoint = (row) => new THREE.Vector3(rowX(row), 0, farZ);
-  // конец ряда — дорожка у дома; у корзинки встаём сбоку (со стороны своего ряда) или спереди, если ряд прямо на неё
+  // Точка в тумане у края острова: from = { side, t } — сторона ('south' — ближний к зрителю край, +z) и место вдоль неё 0..1
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function fogPoint({ side, t }) {
+    if (side === 'south') return new THREE.Vector3(lerp(island.minX + 1, island.maxX - 1, t), 0, island.maxZ + FOG);
+    if (side === 'north') return new THREE.Vector3(lerp(island.minX + 1, island.maxX - 1, t), 0, island.minZ - FOG);
+    if (side === 'east') return new THREE.Vector3(island.maxX + FOG, 0, lerp(island.minZ + 1, island.maxZ - 1, t));
+    return new THREE.Vector3(island.minX - FOG, 0, lerp(island.minZ + 1, island.maxZ - 1, t));
+  }
+  // Куда убегать испуганному: от центра огорода через то место, где он сейчас, — в туман за краем острова
+  function fleePoint(pos) {
+    const dir = pos.clone().setY(0);
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+    dir.normalize();
+    const reach = Math.max(island.maxX, -island.minX, island.maxZ, -island.minZ) + FOG + 1;
+    return dir.multiplyScalar(reach);
+  }
+  // У корзины дух встаёт на краю, со своей стороны
   const basket = cellToWorld(BASKET_CELL.x, BASKET_CELL.z);
-  const rowEnd = (row) => new THREE.Vector3(rowX(row), 0, basket.z);
-  const basketPoint = (row) => (row === BASKET_CELL.x
-    ? basket.clone().setZ(basket.z + 0.55 * CELL_SIZE)
-    : basket.clone().setX(basket.x + Math.sign(row - BASKET_CELL.x) * 0.55 * CELL_SIZE));
+  function basketPoint(pos) {
+    const dir = pos.clone().setY(0).sub(basket);
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+    return basket.clone().add(dir.setLength(0.6 * CELL_SIZE));
+  }
 
-  // Скоро придёт дух: в тумане у ряда проступает свечение (гаснет, когда дух поднимется)
-  function warn(row) {
+  // Скоро придёт дух: в тумане у края острова проступает свечение (гаснет, когда дух поднимется)
+  function warn(from) {
     const material = new THREE.SpriteMaterial({
       map: glowMap, color: WARN_COLOR, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     });
     const glow = new THREE.Sprite(material);
-    glow.position.set(rowX(row), -0.6, farZ);
+    glow.position.copy(fogPoint(from)).setY(-0.6);
     glow.scale.setScalar(2.6);
     scene.add(glow);
     glows.push({ glow, t: 0, life: SPIRITS.warnSeconds + RISE, phase: rand(0, 10) });
@@ -95,12 +110,12 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     sprite.object.add(loot.mesh);
     scene.add(sprite.object);
 
-    const start = fogPoint(spirit.row);
+    const start = fogPoint(spirit.from);
     sprite.object.position.set(start.x, DEPTH, start.z);
     list.push({
-      spirit, kind, sprite, loot,
-      state: 'rise', leg: 'row', // leg: 'row' — идёт по ряду, 'path' — по дорожке к корзинке
-      grabTarget: null, exit: [], t: 0, courage: spirit.courage, flinch: 0, pale: 1, push: 0,
+      spirit, kind, sprite, loot, start,
+      state: 'rise', target: null, retarget: 0, // target — к чему идёт: { cell } или { basket: true }
+      grabTarget: null, exit: [], t: 0, courage: spirit.courage, flinch: 0, pale: 1, push: 0, pushDir: new THREE.Vector3(),
       anim: 'move', animTime: 0, phase: rand(0, 10), flip: false, scale: 1,
     });
     hooks.onAppear?.(spirit);
@@ -130,11 +145,11 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     return !s.exit.length;
   }
 
-  // Уйти обратно в туман по своему ряду (с дорожки — сначала вернуться к началу ряда)
+  // Уйти обратно в туман — туда, откуда пришёл
   function leave(s) {
     s.state = 'leave';
     s.t = 0;
-    s.exit = s.leg === 'path' ? [rowEnd(s.spirit.row), fogPoint(s.spirit.row)] : [fogPoint(s.spirit.row)];
+    s.exit = [s.start.clone()];
     hooks.onLeave?.(s.spirit);
   }
 
@@ -155,21 +170,18 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
     s.loot.mesh.position.copy(layerOffset(LAYER.spirit)).add(new THREE.Vector3(0, s.kind === 'skeleton' ? 0.55 : 0.5, 0.02)); // перед духом
   }
 
-  // Шаг по ряду к дому: до первого спелого растения, а если его нет — к корзинке
+  // Шаг к цели: к ближайшему спелому растению или к корзине. Цель пересматриваем раз в полсекунды
+  // (растение могли собрать, утащить, а рядом могло созреть другое)
   function walk(s, dt, speed) {
     const pos = s.sprite.object.position;
-    const row = s.spirit.row;
-    if (s.leg === 'row') {
-      const stop = night.stopAhead(s.spirit, cellZ(pos));
-      if (stop) {
-        if (moveTo(s, cellToWorld(stop.x, stop.z), dt, speed)) grab(s, { cell: stop });
-        return;
-      }
-      // ряд пройден насквозь: к дорожке у дома (если ряд упирается прямо в корзинку — сразу к ней)
-      if (row === BASKET_CELL.x || moveTo(s, rowEnd(row), dt, speed)) s.leg = 'path';
-      return;
+    s.retarget -= dt;
+    if (!s.target || s.retarget <= 0 || (s.target.cell && !night.isRipe(s.target.cell))) {
+      s.target = night.targetFor({ x: pos.x / CELL_SIZE + OFFSET, z: cellZ(pos) });
+      s.retarget = 0.5;
     }
-    if (moveTo(s, basketPoint(row), dt, speed)) grab(s, { basket: true });
+    const target = s.target;
+    const point = target.cell ? cellToWorld(target.cell.x, target.cell.z) : basketPoint(pos);
+    if (moveTo(s, point, dt, speed)) grab(s, target);
   }
 
   function grab(s, target) {
@@ -189,8 +201,8 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       // где дух для правил: растения бьют только тех, кто идёт по огороду, тянет добычу или уходит
       const reachable = s.state === 'go' || s.state === 'grab' || s.state === 'leave';
       s.spirit.at = reachable && !s.spirit.fled ? { x: pos.x / CELL_SIZE + OFFSET, z: cellZ(pos) } : null;
-      // удар попал: вздрагивает
-      if (s.spirit.courage < s.courage) { s.courage = s.spirit.courage; s.flinch = 1; }
+      // удар попал: вздрагивает (фонарь отнимает смелость понемногу — вздрагивает, когда набралось заметно)
+      if (s.courage - s.spirit.courage > 0.25) { s.courage = s.spirit.courage; s.flinch = 1; }
       s.flinch = Math.max(0, s.flinch - dt * 4);
       // смелость кончилась: испугался — роняет добычу, убегает
       if (reachable && s.spirit.courage <= 0 && !s.spirit.fled) {
@@ -198,7 +210,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
         s.loot.mesh.visible = false;
         s.state = 'flee';
         s.t = 0;
-        s.exit = [new THREE.Vector3(pos.x, 0, farZ)]; // прочь по прямой в туман за дальним краем
+        s.exit = [fleePoint(pos)]; // прочь от центра огорода, в туман за краем острова
         hooks.onScared?.(s.spirit, pos.clone().setY(0), s.spirit.hitBy, returned);
       }
       const speed = SPIRITS.kinds[s.kind].speed;
@@ -209,15 +221,15 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       const pale = s.state === 'flee' || s.state === 'sink' ? 0.5 : 0.45 + 0.55 * bold;
       s.pale += (pale - s.pale) * Math.min(1, dt * 6);
 
-      // толчок тыквы: отлетает назад, к туману (если тянул добычу — выпускает её и снова идёт к ней)
+      // толчок тыквы: отлетает назад, туда, откуда пришёл (если тянул добычу — выпускает её и снова идёт к ней)
       if (s.push > 0) {
         const step = Math.min(s.push, dt * 4);
-        pos.z += step * CELL_SIZE;
+        pos.addScaledVector(s.pushDir, step * CELL_SIZE);
         s.push -= step;
       }
 
       if (s.state === 'rise') {
-        // поднимается из тумана, потом идёт по ряду
+        // поднимается из тумана, потом идёт к цели
         const k = Math.min(1, s.t / RISE);
         pos.y = DEPTH + (hover - DEPTH) * (1 - (1 - k) ** 3);
         if (k >= 1) { s.state = 'go'; s.t = 0; }
@@ -255,7 +267,7 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
         if (pos.y < DEPTH || s.scale <= 0) remove(s);
       }
 
-      // блуждающий огонь покачивается из стороны в сторону, не сходя со своего ряда
+      // блуждающий огонь покачивается из стороны в сторону
       const sway = s.kind === 'wisp' && (s.state === 'go' || s.state === 'leave') ? Math.sin(time * 3 + s.phase) * 0.15 : 0;
 
       // кадр анимации
@@ -286,11 +298,12 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
   return {
     warn,
     add,
-    // Толчок: отлетает на cells клеток назад, к туману
+    // Толчок: отлетает на cells клеток назад, туда, откуда пришёл
     knock(spirit, cells) {
       const s = list.find((x) => x.spirit === spirit);
       if (!s || !['go', 'grab', 'leave'].includes(s.state)) return;
       s.push = cells;
+      s.pushDir.copy(s.start).sub(s.sprite.object.position).setY(0).normalize();
       if (s.state === 'grab') { s.state = 'go'; s.t = 0; }
     },
         // Где дух сейчас (для эффектов атак); null — его уже нет

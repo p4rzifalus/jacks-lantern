@@ -33,6 +33,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     basketLevel: 0, // сколько раз корзинку улучшили в магазине
     embers: 0,      // огоньки — от прогнанных ночью духов
     discovered: [], // какие гибриды уже выведены (их семена — только скрещиванием)
+    nightsSeen: 0,  // сколько ночей уже прошло (от этого — сколько духов приходит, config.js → NIGHTS)
     shopOpen: false,
   };
 
@@ -95,7 +96,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     } else if (state.tool === 'basket') {
       if (stage === EMPTY) return onHint('Здесь пусто');
       if (stage !== RIPE) return onHint(garden.isWet(c) ? 'Ещё растёт' : 'Сначала полей');
-      if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине у дома');
+      if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине в центре огорода');
       const cell = garden.cell(c);
       const wilted = cell.nights > 0;
       const hybrid = crossSeed(c, cell.plant);
@@ -111,7 +112,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     }
   }
 
-  // Большая корзина у дома превращает урожай в монеты: всё из корзинки для сбора — разом
+  // Большая корзина в центре огорода превращает урожай в монеты: всё из корзинки для сбора — разом
   function putInBasket() {
     if (!state.carried.length) return onHint('Корзинка пуста — сначала собери урожай');
     const lockedBefore = PLANT_TYPES.filter((t) => !isUnlocked(t));
@@ -177,7 +178,7 @@ export function createGame({ onHint, onEffect, onChange }) {
       while (rainCarry >= 1) {
         rainCarry--;
         const cell = garden.cells[Math.floor(Math.random() * garden.cells.length)];
-        if (garden.isWet(cell)) continue;
+        if (isBasket(cell) || garden.isWet(cell)) continue;
         garden.water(cell);
         wetted = true;
       }
@@ -220,6 +221,12 @@ export function createGame({ onHint, onEffect, onChange }) {
     },
     addEmbers(n) {
       state.embers += n;
+      changed();
+    },
+
+    // Ночь кончилась — следующая будет по следующей строке NIGHTS
+    nightPassed() {
+      state.nightsSeen++;
       changed();
     },
 
@@ -306,8 +313,8 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     // Для сохранения (позицию героя добавляет main.js)
     toSave() {
-      const { coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered } = state;
-      return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered };
+      const { coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered, nightsSeen } = state;
+      return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered, nightsSeen };
     },
     load(saved) {
       // файл могли поправить руками — все числа приводим к целым неотрицательным
@@ -316,7 +323,15 @@ export function createGame({ onHint, onEffect, onChange }) {
       garden.load(Array.isArray(saved.cells) ? saved.cells : []);
       state.coins = count(saved.coins);
       state.embers = count(saved.embers);
+      // в старых сохранениях ночей не считали: кто уже прогонял духов — начинает не с самой первой ночи
+      state.nightsSeen = saved.nightsSeen !== undefined ? count(saved.nightsSeen) : state.embers > 0 ? 2 : 0;
       state.seeds = counts(saved.seeds);
+      // огород стал 9×9 с корзиной в центре: что росло на её месте — семенем в мешочек
+      const underBasket = garden.cell(BASKET_CELL).plant;
+      if (underBasket) {
+        garden.harvest(BASKET_CELL);
+        if (!isFree(underBasket)) state.seeds[underBasket] = (state.seeds[underBasket] || 0) + 1;
+      }
       state.harvested = counts(saved.harvested);
       state.basketLevel = Math.min(count(saved.basketLevel), HAND_BASKET.length - 1);
       state.discovered = (Array.isArray(saved.discovered) ? saved.discovered : []).filter((t) => PLANTS[t] && isHybrid(t));

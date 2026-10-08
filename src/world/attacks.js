@@ -59,7 +59,7 @@ function ringTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-// Лежащая на земле трапеция: узкая у подсолнуха (near), широкая вдали (far), длиной length вперёд (+z)
+// Лежащая на земле трапеция: узкая у подсолнуха (near), широкая вдали (far), длиной length вперёд (+z; поворачивается к духу)
 function coneGeometry(near, far, length) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([
@@ -108,12 +108,14 @@ export function createAttacks(scene, positionOf) {
     sprites.splice(sprites.indexOf(entry), 1);
   }
 
-  function groundGlow(geometry, map, color, at, life, update) {
+  // turn — поворот вокруг вертикали (для луча — в сторону духа)
+  function groundGlow(geometry, map, color, at, life, update, turn = 0) {
     const material = new THREE.MeshBasicMaterial({
       map, color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(at);
+    mesh.rotation.y = turn;
     scene.add(mesh);
     glows.push({ mesh, t: 0, life, update });
   }
@@ -151,19 +153,21 @@ export function createAttacks(scene, positionOf) {
     }
   }
 
-  // Подсолнух: конус света от головы вдоль земли вперёд (к туману) на три ряда, в нём кружатся пылинки
-  function beam(c, reach) {
+  // Подсолнух: конус света от головы вдоль земли в сторону духа (toward — где дух, в клетках), в нём кружатся пылинки
+  function beam(c, reach, toward = { x: c.x, z: c.z + 1 }) {
     const length = (reach + 0.5) * CELL_SIZE;
     const at = cellToWorld(c.x, c.z).setY(0.06);
-    groundGlow(coneGeometry(0.5 * CELL_SIZE, 3 * CELL_SIZE, length), beamMap, '#ffe08a', at, BEAM_SECONDS, (g, k) => {
+    const dir = new THREE.Vector3(toward.x - c.x, 0, toward.z - c.z).normalize();
+    const side = new THREE.Vector3(dir.z, 0, -dir.x); // поперёк луча
+    groundGlow(coneGeometry(0.5 * CELL_SIZE, 2 * CELL_SIZE, length), beamMap, '#ffe08a', at, BEAM_SECONDS, (g, k) => {
       g.mesh.material.opacity = BEAM_BRIGHTNESS * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85);
-    });
+    }, Math.atan2(dir.x, dir.z));
     for (let i = 0; i < 16; i++) {
       const along = rand(0.3, length);
-      const half = 0.25 + (1.25 * along) / length;
+      const half = 0.25 + (0.75 * along) / length;
       motes.spawn({
-        pos: new THREE.Vector3(at.x + rand(-half, half), rand(0.05, 0.4), at.z + along),
-        vel: new THREE.Vector3(rand(-0.1, 0.1), rand(0.2, 0.5), rand(0.1, 0.4)), life: rand(0.6, 1), gravity: 0,
+        pos: at.clone().addScaledVector(dir, along).addScaledVector(side, rand(-half, half)).setY(rand(0.05, 0.4)),
+        vel: dir.clone().multiplyScalar(rand(0.1, 0.4)).setY(rand(0.2, 0.5)), life: rand(0.6, 1), gravity: 0,
       });
     }
     // вспышка у головы
@@ -193,11 +197,11 @@ export function createAttacks(scene, positionOf) {
 
   return {
     // Растение ударило: { type, reach, from, targets, delay } из night.js
-    show({ type, reach, from, targets, delay }) {
+    show({ type, reach, from, targets, delay, toward }) {
       if (type === 'whip') for (const s of targets) whip(from, s);
       else if (type === 'spark') spark(from, targets[0], delay);
       else if (type === 'wall') thump(from);
-      else if (type === 'beam') beam(from, reach);
+      else if (type === 'beam') beam(from, reach, toward);
       else if (type === 'spores') sporeWave(from, reach);
     },
 

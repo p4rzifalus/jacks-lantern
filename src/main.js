@@ -1,7 +1,7 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
 import { HERO_START, BASKET_CELL, PLANTS, GROWTH_SPEED } from './config.js';
-import { cellToWorld, worldToCell, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
+import { cellToWorld, worldToCell, cellCoords, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
 import { RIPE } from './garden.js';
 import { createScene, createHoverFrame, createFrontMarker } from './scene.js';
@@ -125,9 +125,9 @@ const ATTACK_SOUNDS = {
 const night = createNight({
   game,
   daytime,
-  // скоро придёт дух: у его ряда в тумане проступает свечение и звучит «у-у»
-  onWarn(row) {
-    spirits.warn(row);
+  // скоро придёт дух: в тумане у края острова проступает свечение и звучит «у-у»
+  onWarn(from) {
+    spirits.warn(from);
     sound.spiritAppear();
   },
   onSpawn: (spirit) => spirits.add(spirit),
@@ -410,7 +410,10 @@ function warmUpShaders() {
   sprite(sheets.fx, { castShadow: false });      // искры и вспышки боя
   const glowMap = new THREE.CanvasTexture(document.createElement('canvas')); // как у свечений: картинка из кода
   const additive = { map: glowMap, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
-  group.add(new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial(additive))); // свечение на земле (луч, кольцо спор)
+  group.add(new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial(additive))); // свечение на земле (кольцо спор)
+  const beamShape = new THREE.PlaneGeometry();
+  beamShape.deleteAttribute('normal'); // луч подсолнуха — фигура без нормалей (world/attacks.js → coneGeometry)
+  group.add(new THREE.Mesh(beamShape, new THREE.MeshBasicMaterial(additive)));
   group.add(new THREE.Sprite(new THREE.SpriteMaterial({ ...additive, fog: false })));            // свечение в тумане перед духом
   for (const material of Object.values(gardenView.soil)) { // земля грядки: сухая, мокрая, со спелым урожаем
     const tile = new THREE.Mesh(new THREE.BoxGeometry(), material);
@@ -433,23 +436,27 @@ const warmUpTick = warmUpShaders();
 let frameCount = 0;
 
 let last = performance.now();
+const screenRight = new THREE.Vector3(); // «вправо» на экране — в сцене
 let daytimeFrame = 0;
 let shownLamps = -1;
 ui.setDaytime(daytime.phase());
-renderer.setAnimationLoop((now) => {
+renderer.setAnimationLoop(frame);
+function frame(now) {
   if (++frameCount % 60 === 0) applySkyReflex(scene);
   const dt = Math.min((now - last) / 1000, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
   last = now;
 
   hero.update(dt, input.getMoveDir(), world);
   cameraControl.update(dt, now / 1000, hero.position);
-  gardenView.update(Date.now(), dt, night.threat); // ночью, пока по огороду ходит дух, спелые растения настороже
+  // ночью, пока по огороду ходит дух, спелые растения настороже и тянутся к ближайшему
+  gardenView.update(Date.now(), dt, night.threat, spirits.positions(), screenRight.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize());
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
   if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
     daytime.update(dt);
     if (weather.raining) game.rain(dt); // дождь мочит грядки
-    night.update(dt);
+    night.update(dt, cellCoords(hero.position)); // фонарь енота пугает духов рядом
+    hero.setLantern(hero.lanternLevel + ((night.active ? 1 : 0) - hero.lanternLevel) * Math.min(1, dt * 1.5)); // ночью фонарь разгорается
     spirits.update(dt, now / 1000);
     attacks.update(dt);
     embers.update(dt, now / 1000, hero.position);
@@ -484,7 +491,7 @@ renderer.setAnimationLoop((now) => {
   pipeline.render(dt);
   warmUpTick();
   devPanel?.tick(now);
-});
+}
 
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
@@ -494,5 +501,11 @@ if (import.meta.env.DEV) {
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,
     cheat(extraCoins = 1000) { game.addCoins(extraCoins); },
+    // прокрутить игру на seconds секунд кадрами по 1/30 с (когда вкладка в фоне и браузер кадры не даёт)
+    run(seconds) {
+      let t = performance.now();
+      for (let i = 0; i < seconds * 30; i++) frame((t += 1000 / 30));
+      last = performance.now();
+    },
   };
 }
