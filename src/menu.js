@@ -26,7 +26,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   backdrop.appendChild(card);
   document.body.appendChild(backdrop);
 
-  let screen = null; // 'start' | 'menu' | 'morning' | null
+  let screen = null; // 'start' | 'menu' | 'morning' | 'discovery' | null
   let busy = false;  // идёт работа с файлом — повторные нажатия не нужны
 
   const setScreen = (name) => {
@@ -138,7 +138,15 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   }
 
   function render(name, data) {
-    if (name === 'morning') {
+    if (name === 'discovery') {
+      // выведен новый гибрид: картинка, имя, от кого и что умеет
+      card.innerHTML = `
+        <div class="menu-subtitle">новое растение</div>
+        <div class="menu-discovery"><img src="${data.image}" alt=""></div>
+        <div class="menu-title title">${escapeHtml(data.name)}</div>
+        <div class="menu-report">${data.rows.map(([label, value]) => `<div><span>${label}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div>
+        <div class="menu-buttons"><button class="primary" data-act="close">Чудесно</button></div>`;
+    } else if (name === 'morning') {
       // утро после ночи: что было
       card.innerHTML = `
         <div class="menu-title title">Ночь прошла</div>
@@ -191,7 +199,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   });
   // клик мимо окна закрывает меню (но не стартовый экран)
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop && (screen === 'menu' || screen === 'morning')) close();
+    if (e.target === backdrop && (screen === 'menu' || screen === 'morning' || screen === 'discovery')) close();
   });
   // звук переключили клавишами N / M — обновить кнопки
   engine.onChange(() => {
@@ -219,9 +227,13 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     showMorning(rows) {
       if (!screen) render('morning', rows);
     },
+    // Окно «новое растение»: { name, image (адрес картинки), rows: [подпись, значение] }
+    showDiscovery(data) {
+      if (!screen) render('discovery', data);
+    },
     open: () => render('menu'),
     close() {
-      if (screen === 'menu' || screen === 'morning') close(); // стартовый экран закрывается только кнопками
+      if (screen === 'menu' || screen === 'morning' || screen === 'discovery') close(); // стартовый экран закрывается только кнопками
     },
     toggle() {
       if (screen === 'menu') close();

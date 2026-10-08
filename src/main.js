@@ -1,6 +1,6 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
-import { HERO_START, BASKET_CELL, PLANTS } from './config.js';
+import { HERO_START, BASKET_CELL, PLANTS, GROWTH_SPEED } from './config.js';
 import { cellToWorld, worldToCell, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
 import { RIPE } from './garden.js';
@@ -33,6 +33,8 @@ import { createAttacks } from './world/attacks.js';
 import { createSpirits } from './world/spirits.js';
 import { Sprite } from './render/sprites.js';
 import { getSheets } from './world/sheets.js';
+import { PLANT_ORDER, PLANT_FRAME } from './art/sprite-art.js';
+import { formatTime } from './text.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -64,6 +66,7 @@ const game = createGame({
     effectJustPlayed = true;
     queueMicrotask(() => { effectJustPlayed = false; });
     if (name === 'unlocked') return sound.unlocked();
+    if (name === 'hybrid') return discovered(cell, earned); // скрещивание: earned — { type, first }
     sound[name](earned); // при продаже: чем больше выручка, тем больше монеток звенит
     hero.playAction(); // герой наклоняется: сажает, поливает, собирает, кладёт в корзинку
     const at = cellToWorld(cell.x, cell.z);
@@ -74,6 +77,35 @@ const game = createGame({
   },
   onChange: refresh,
 });
+
+// ---------- Скрещивание: получилось семя гибрида ----------
+// Вспышка и перезвон; если гибрид выведен впервые — через миг окно «новое растение»
+function discovered(cell, { type, first }) {
+  sound.hybrid(first);
+  effects.discovery(cellToWorld(cell.x, cell.z), first);
+  if (first) setTimeout(() => menu.showDiscovery(discoveryCard(type)), 900);
+}
+
+// Окно открытия: картинка спелого растения (из листа растений), от кого выведено, что умеет
+function discoveryCard(type) {
+  const p = PLANTS[type];
+  const { frameW, frameH } = PLANT_FRAME;
+  const canvas = document.createElement('canvas');
+  canvas.width = frameW;
+  canvas.height = frameH;
+  canvas.getContext('2d').drawImage(getSheets().plants.material.map.image, 3 * frameW, PLANT_ORDER.indexOf(type) * frameH, frameW, frameH, 0, 0, frameW, frameH);
+  const [a, b] = p.hybrid.map((t) => PLANTS[t].name.toLowerCase());
+  return {
+    name: p.name,
+    image: canvas.toDataURL(),
+    rows: [
+      ['Выведено из', `${a} и ${b}`],
+      ['Растёт', formatTime((p.stageSeconds * RIPE) / GROWTH_SPEED)],
+      ['Урожай', `${p.sellPrice} мон.`],
+      ['Ночью', p.defense.role],
+    ],
+  };
+}
 
 // ---------- Картинка ----------
 const gardenView = new GardenView(scene, game.garden);
@@ -340,6 +372,12 @@ function ripeMushrooms() {
     .map((c) => cellToWorld(c.x, c.z));
 }
 
+// Где летает пыльца: пары спелых соседей, из которых может выйти гибрид (пересчитываем раз в полсекунды)
+let pollenPairs = [];
+function updatePollen() {
+  pollenPairs = game.crossPairs().map(([a, b]) => [cellToWorld(a.x, a.z), cellToWorld(b.x, b.z)]);
+}
+
 // Показать подсветку на клетке (или спрятать)
 function placeOn(object, cell) {
   object.visible = !!cell;
@@ -353,6 +391,7 @@ function placeOn(object, cell) {
 // Шейдеры — заранее, пока игра на стартовом экране. Иначе видеокарта готовит новую программу отрисовки прямо
 // посреди игры (в первую ночь, у первого духа, при первой атаке) — и картинка дёргается.
 // Рисуем по одному крошечному (невидимому глазу) образцу всего, что появляется только ночью, пару кадров — и убираем.
+// А то, что сейчас спрятано (лунные лучи, конусы фонарей, дождь), готовим для всей сцены разом в первом кадре.
 function warmUpShaders() {
   const sheets = getSheets();
   const group = new THREE.Group();
@@ -378,10 +417,12 @@ function warmUpShaders() {
     tile.receiveShadow = true;
     group.add(tile);
   }
+  group.traverse((o) => { o.frustumCulled = false; }); // рисовать, даже если середина острова не в кадре
   scene.add(group);
   applySkyReflex(scene); // вставка неба — сразу, иначе шейдер соберётся ещё раз
   let frames = 3;
   return () => {
+    if (frames === 3) renderer.compile(scene, camera);
     if (frames > 0 && --frames === 0) scene.remove(group);
   };
 }
@@ -423,7 +464,8 @@ renderer.setAnimationLoop((now) => {
   }
   gardenView.setShine(lamps); // мокрые грядки блестят при фонарях (каждый кадр: текстура могла догрузиться позже)
   decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
-  effects.update(dt, { ripeMushrooms: ripeMushrooms(), visibility: 1 - weather.wetness, lamps });
+  if (frameCount % 30 === 0) updatePollen();
+  effects.update(dt, { ripeMushrooms: ripeMushrooms(), pollenPairs, visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);
   fogSea.update(dt, lamps);
   sound.update(dt, {

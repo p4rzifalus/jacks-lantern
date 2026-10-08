@@ -18,6 +18,13 @@ export const COLORS = {
   sunflowerCenter: '#4a2a12',
   mushroomStem: '#e8dcc0',
   mushroomCap: '#6fe3ff',  // светится
+  // гибриды
+  firerootRoot: '#e0452a',   // огнекорень: красно-рыжий корень
+  lanternPumpkin: '#c9482a', // тыква-фонарь: тёмно-рыжая
+  sunPumpkin: '#f5cf52',     // солнечная тыква: соломенно-жёлтая
+  moonCap: '#d6dcff',        // лунный гриб: серебристая шляпка (светится)
+  starbloom: '#ffe27a',      // звездоцвет: звезда-цветок (светится)
+  goldPumpkin: '#ffe066',    // золотая тыква (с блестящим бликом)
   houseWalls: '#c9a37b',
   houseRoof: '#8c3b2b',
   houseDoor: '#4a2c1a',
@@ -101,10 +108,11 @@ export const HERO_START = { x: 4, z: 8 };     // где герой появля�
 // Растения, в порядке открытия.
 //   stageSeconds — сколько секунд длится каждая стадия после полива
 //                  (семечко → росток → куст → спелое, то есть рост целиком = 3 × stageSeconds)
-//   seedPrice    — цена семечка в магазине (0 — бесплатно и бесконечно)
+//   seedPrice    — цена семечка в магазине (0 — бесплатно и бесконечно, null — в магазине не продаётся)
 //   sellPrice    — сколько монет даёт корзинка за урожай
 //   unlock       — когда открывается: собрать count штук растения plant
 //   forms        — как сказать «собери 1 / 3 / 5 …» (для подсказок)
+//   hybrid       — гибрид: от каких двух растений выводится (см. CROSSING). Семена гибридов не продаются — только скрещивание
 //   defense      — как защищает ночью, если спелое и не собрано:
 //                  role — роль (для магазина), hold — сколько секунд дух тянет это растение, прежде чем утащить
 //                  (нет — обычное время, SPIRITS.grabSeconds), nights — сколько ночей служит, потом отцветает,
@@ -131,6 +139,32 @@ export const PLANTS = {
   mushroom:  { name: 'Светящийся гриб', stageSeconds: 240, seedPrice: 90,  sellPrice: 260, unlock: { plant: 'sunflower', count: 3 }, forms: ['гриб', 'гриба', 'грибов'],
     defense: { role: 'волна спор вокруг себя, 3×3', nights: 3, seeds: [1, 2] },
     attack: { type: 'spores', reach: 1, power: 2, every: 4 } },
+
+  // Гибриды: выводятся скрещиванием. Первые четыре — из обычных растений, последние два — только из двух гибридов.
+  fireroot:   { name: 'Огнекорень',      stageSeconds: 30,  seedPrice: null, sellPrice: 14,  hybrid: ['carrot', 'radish'],          forms: ['огнекорень', 'огнекорня', 'огнекорней'],
+    defense: { role: 'хлещет горящей ботвой соседнюю клетку', nights: 2, seeds: [1, 1] },
+    attack: { type: 'whip', reach: 1, power: 2, every: 1.5 } },
+  lanternPumpkin: { name: 'Тыква-фонарь', stageSeconds: 60, seedPrice: null, sellPrice: 40,  hybrid: ['radish', 'pumpkin'],        forms: ['тыкву-фонарь', 'тыквы-фонаря', 'тыкв-фонарей'],
+    defense: { role: 'стена, которая сама бьёт духа искрами', hold: 15, nights: 3, seeds: [1, 1] },
+    attack: { type: 'wall', reach: 0, power: 1.5, every: 2 } },
+  sunPumpkin: { name: 'Солнечная тыква', stageSeconds: 80,  seedPrice: null, sellPrice: 120, hybrid: ['pumpkin', 'sunflower'],     forms: ['солнечную тыкву', 'солнечные тыквы', 'солнечных тыкв'],
+    defense: { role: 'слабая стена', hold: 10, nights: 2, seeds: [1, 1] },
+    attack: { type: 'wall', reach: 0, power: 0.5, every: 3 } },
+  moonMushroom: { name: 'Лунный гриб',   stageSeconds: 160, seedPrice: null, sellPrice: 300, hybrid: ['sunflower', 'mushroom'],    forms: ['лунный гриб', 'лунных гриба', 'лунных грибов'],
+    defense: { role: 'луч на 4 клетки по трём рядам', nights: 3, seeds: [1, 1] },
+    attack: { type: 'beam', reach: 4, power: 1.5, every: 2.5 } },
+  starbloom:  { name: 'Звездоцвет',      stageSeconds: 120, seedPrice: null, sellPrice: 150, hybrid: ['fireroot', 'moonMushroom'], forms: ['звездоцвет', 'звездоцвета', 'звездоцветов'],
+    defense: { role: 'волна спор вокруг себя, 5×5', nights: 3, seeds: [1, 1] },
+    attack: { type: 'spores', reach: 2, power: 2, every: 4 } },
+  goldPumpkin: { name: 'Золотая тыква',  stageSeconds: 200, seedPrice: null, sellPrice: 700, hybrid: ['lanternPumpkin', 'sunPumpkin'], forms: ['золотую тыкву', 'золотые тыквы', 'золотых тыкв'],
+    defense: { role: 'почти не защищает: дух лишь чуть дольше её тянет', hold: 8, nights: 1, seeds: [1, 1] },
+    attack: { type: 'wall', reach: 0, power: 0.25, every: 4 } },
+};
+
+// Скрещивание: собираешь спелое растение, а рядом (сверху, снизу, слева или справа) растёт спелое растение из пары
+// какого-нибудь гибрида (PLANTS → hybrid) — с таким шансом в мешочек падает семя гибрида (0.3 — в трёх случаях из десяти)
+export const CROSSING = {
+  chance: 0.3,
 };
 
 // Корзинка для сбора (инструмент 3): сколько овощей помещается. Полную относят к большой корзине у дома.
@@ -169,6 +203,7 @@ export const DECOR = {
 // Эффекты из частиц
 export const EFFECTS = {
   sporeEvery: 0.6, // как часто спелые грибы выпускают светящиеся споры (секунд)
+  pollenEvery: 0.5, // пыльца между спелыми соседями, из которых может выйти гибрид: пылинка раз в столько секунд на пару
 };
 
 // Погода. Дождь мочит случайные грядки (на них, как после лейки, растёт посаженное)

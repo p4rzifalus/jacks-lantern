@@ -5,6 +5,19 @@ import { PixelSheet } from './pixels.js';
 
 export const PLANT_ORDER = Object.keys(PLANTS); // строки листа растений
 
+// Рисунок растения из таблицы рисунков: у гибрида без своего рисунка — рисунок первого родителя
+function artOf(table, type) {
+  let t = type;
+  while (!table[t] && PLANTS[t]?.hybrid) t = PLANTS[t].hybrid[0];
+  return table[t];
+}
+// Чей рисунок у растения (для гибрида без своего — родителя)
+function artType(type) {
+  let t = type;
+  while (!DRAW_PLANT[t] && PLANTS[t]?.hybrid) t = PLANTS[t].hybrid[0];
+  return t;
+}
+
 // ---------- Герой: енот и крот ----------
 // Кадр 32×32, земля — нижняя строка. Колонки: стоит 0–3, идёт 4–9, действует 10–13, несёт 14–19.
 // Строки: 0 — к зрителю, 1 — влево, 2 — вправо (зеркало), 3 — от зрителя.
@@ -214,7 +227,7 @@ export function drawHeroSheet(skin) {
 // ---------- Растения ----------
 // Кадр 32×40, земля — нижняя строка. Колонки: стадии 0 семечко, 1 росток, 2 куст, 3 спелое;
 // дальше — спелое растение ночью: 4–5 настороже (по улице ходит дух), 6 замах, 7 удар.
-// Строки — растения в порядке PLANT_ORDER (морковь, редис, тыква, подсолнух, гриб).
+// Строки — растения в порядке PLANT_ORDER (морковь, редис, тыква, подсолнух, гриб, потом гибриды).
 export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 8, alert: [4, 2], windup: 6, strike: 7 };
 
 // Маленькая кучка земли у основания растения
@@ -345,7 +358,134 @@ const DRAW_PLANT = {
     for (const [x, y] of spots) d.px(x, y, '#d8fbff', glow); // пятнышки
     if (pose === 'strike') for (const [x, y] of [[10, 17], [16, 14], [22, 17], [13, 12], [19, 11], [8, 13], [24, 12]]) d.px(x, y, '#b8f8ff', glow);
   },
+
+  // ---------- Гибриды: похожи на обоих родителей ----------
+  // Огнекорень (морковь + редис): ботва моркови с тлеющими кончиками, корень красный, как редис
+  fireroot(d, stage, pose = 'rest', i = 0) {
+    let top = stage === 3 ? 17 : 23;
+    let shift = 0;
+    let spread = 1;
+    if (pose === 'alert') { top = 15; shift = i ? 1 : -1; }
+    if (pose === 'windup') { top = 20; shift = -5; spread = 0.6; }
+    if (pose === 'strike') { top = 17; shift = 6; spread = 1.15; }
+    for (const [dx, dy] of [[-7, 3], [-4, 0], [0, -1], [4, 0], [7, 3]]) {
+      const x = Math.round(16 + dx * spread + shift);
+      const y = top + dy;
+      d.line(16, 34, x, y, C.leaves);
+      d.ellipse(x, y, 1.5, 1.5, C.leaves);
+      if (stage === 3) d.px(x, y - 1, pose === 'alert' && i ? FIRE : EMBER, true); // кончики тлеют
+    }
+    if (pose === 'strike') { // горящий хлыст
+      d.line(16, 33, 23, 26, C.leaves);
+      d.line(23, 26, 28, 23, C.leaves);
+      d.ellipse(28, 23, 2, 1.5, FIRE, true);
+      d.px(30, 21, EMBER, true);
+    }
+    if (stage === 3) {
+      d.ellipse(16, 35, 4, 2, C.firerootRoot);
+      d.px(15, 34, EMBER, true);
+    }
+  },
+  // Тыква-фонарь (редис + тыква): тыква поменьше с вырезанным лицом — светится всегда, сверху ботва редиса
+  lanternPumpkin(d, stage, pose = 'rest', i = 0) {
+    d.ellipse(10, 33, 3.5, 2, C.leaves);
+    d.ellipse(22, 32, 3.5, 2, C.leaves);
+    if (stage !== 3) {
+      d.line(16, 34, 13, 28, C.leaves);
+      d.line(16, 34, 19, 28, C.leaves);
+      d.ellipse(13, 28, 2, 3, C.leaves);
+      d.ellipse(19, 28, 2, 3, C.leaves);
+      return;
+    }
+    const [cy, rx, ry] = pose === 'windup' ? [32, 9.5, 4.5] : pose === 'strike' ? [29, 7.5, 6] : [31, 8, 5];
+    d.ellipse(16, cy, rx, ry, C.lanternPumpkin);
+    for (const x of [16 - rx / 2, 16 + rx / 2]) d.line(x, cy - ry + 1, x, cy + ry - 1, '#8f2e1a'); // рёбра
+    d.line(16, cy - ry, 13, cy - ry - 5, C.leaves); // ботва редиса вместо хвостика
+    d.line(16, cy - ry, 19, cy - ry - 5, C.leaves);
+    d.ellipse(13, cy - ry - 6, 2, 2.5, C.leaves);
+    d.ellipse(19, cy - ry - 6, 2, 2.5, C.leaves);
+    const light = pose === 'rest' || (pose === 'alert' && i) ? '#ffb040' : FIRE;
+    d.rect(12, cy - 2, 2, 2, light, true); // глаза
+    d.rect(18, cy - 2, 2, 2, light, true);
+    d.rect(13, cy + 1, 6, 1, light, true); // улыбка
+    d.px(14, cy + 2, light, true);
+    d.px(17, cy + 2, light, true);
+    if (pose === 'strike') for (const [x, y] of [[5, cy - 4], [27, cy - 5], [8, cy - 9], [24, cy - 10]]) d.px(x, y, FIRE, true); // искры
+  },
+  // Солнечная тыква (тыква + подсолнух): золотистая тыква с короной из лепестков
+  sunPumpkin(d, stage, pose = 'rest', i = 0) {
+    d.ellipse(10, 32, 4, 2.5, C.leaves);
+    d.ellipse(22, 31, 4, 2.5, C.leaves);
+    d.ellipse(16, 29, 3, 2, C.leaves);
+    if (stage !== 3) return;
+    const [cy, rx, ry] = pose === 'windup' ? [32, 11, 5] : pose === 'strike' ? [29, 9, 7] : [31, 10, 6];
+    d.ellipse(16, cy, rx, ry, C.sunPumpkin);
+    for (const x of [16 - rx / 2, 16, 16 + rx / 2]) d.line(x, cy - ry + 1, x, cy + ry - 1, '#d9a832');
+    const top = cy - ry - 1;
+    const open = pose === 'windup' ? 2 : pose === 'strike' ? 4 : 3; // лепестки сжаты / раскрыты
+    for (const [dx, dy] of [[-1, 0], [1, 0], [-0.7, -0.7], [0.7, -0.7], [0, -1]]) {
+      d.ellipse(16 + dx * open, top + dy * open, 1.5, 1.5, C.sunflowerPetals, pose === 'alert' && i);
+    }
+    d.ellipse(16, top, 1.5, 1.5, C.sunflowerCenter);
+  },
+  // Лунный гриб (подсолнух + гриб): серебристая шляпка с полумесяцем, под ней — бахрома из лепестков
+  moonMushroom(d, stage, pose = 'rest', i = 0) {
+    const glow = true;
+    if (stage === 1) { d.ellipse(16, 34, 2, 1.5, C.moonCap, glow); return; }
+    let shape = stage === 2 ? [15, 2, 31, 4, 30, 4, 2.5] : [14, 4, 28, 8, 26, 9, 5];
+    if (pose === 'windup') shape = [14, 4, 31, 5, 29, 10, 4];
+    if (pose === 'strike') shape = [14, 4, 27, 9, 25, 9, 5];
+    const [sx, sw, sy, sh, cy, rx, ry] = shape;
+    d.ellipse(16, cy, rx, ry, pose === 'alert' && i ? '#f0f2ff' : C.moonCap, glow);
+    for (let y = cy + 1; y <= cy + ry + 1; y++) for (let x = 16 - rx - 1; x <= 16 + rx + 1; x++) d.px(x, y, null);
+    d.rect(sx, sy, sw, sh, C.mushroomStem);
+    if (stage !== 3) return;
+    for (let x = 16 - rx + 1; x <= 16 + rx - 1; x += 3) d.px(x, cy + 1, C.sunflowerPetals); // бахрома
+    d.ellipse(13, cy - 2, 2.5, 2.5, '#fff8d0', glow); // полумесяц: светлый круг, «надкушенный» шляпкой
+    d.ellipse(14, cy - 3, 2, 2, pose === 'alert' && i ? '#f0f2ff' : C.moonCap, glow);
+    if (pose === 'strike') for (let k = 0; k < 5; k++) d.line(16 + (k - 2) * 3, cy - ry - 2, 16 + (k - 2) * 5, cy - ry - 8, '#fff8d0', glow); // лучи
+  },
+  // Звездоцвет (огнекорень + лунный гриб): на тонком стебле — светящаяся пятиконечная звезда
+  starbloom(d, stage, pose = 'rest', i = 0) {
+    const top = stage === 3 ? 14 : 19;
+    d.line(16, 36, 16, top, C.leaves);
+    d.ellipse(13, 29, 3, 1.5, C.leaves);
+    d.ellipse(19, 25, 3, 1.5, C.leaves);
+    d.px(10, 29, EMBER, true); // кончики листьев тлеют, как у огнекорня
+    d.px(22, 25, EMBER, true);
+    if (stage !== 3) { d.ellipse(16, top - 1, 2, 2, C.starbloom, true); return; }
+    const r = pose === 'windup' ? 5 : pose === 'strike' ? 9 : 7;
+    const turn = pose === 'alert' ? (i ? 18 : -18) : 0; // всматривается — чуть поворачивается
+    for (let k = 0; k < 5; k++) {
+      const a = ((-90 + 72 * k + turn) * Math.PI) / 180;
+      d.line(16, 9, 16 + Math.cos(a) * r, 9 + Math.sin(a) * r, C.starbloom, true);
+    }
+    d.ellipse(16, 9, 2.5, 2.5, '#fff6c8', true);
+    if (pose === 'strike') for (const [x, y] of [[5, 6], [27, 6], [8, 19], [24, 19], [16, 0], [3, 13], [29, 13]]) d.px(x, y, '#b8f8ff', true);
+  },
+  // Золотая тыква (тыква-фонарь + солнечная тыква): большая, блестящая, с искорками
+  goldPumpkin(d, stage, pose = 'rest', i = 0) {
+    d.ellipse(9, 32, 4, 2.5, C.leaves);
+    d.ellipse(23, 31, 4, 2.5, C.leaves);
+    d.ellipse(16, 29, 3, 2, C.leaves);
+    if (stage !== 3) return;
+    const [cy, rx, ry] = pose === 'windup' ? [32, 12, 5] : pose === 'strike' ? [29, 10, 7.5] : [31, 11, 6.5];
+    d.ellipse(16, cy, rx, ry, C.goldPumpkin);
+    for (const x of [16 - rx / 2, 16, 16 + rx / 2]) d.line(x, cy - ry + 1, x, cy + ry - 1, '#c9961a');
+    d.rect(15, cy - ry - 2, 2, 3, C.stem);
+    for (let x = 16 - rx + 3; x <= 16 + rx - 3; x++) d.px(x, Math.round(cy - ry * Math.sqrt(1 - ((x - 16) / rx) ** 2)) + 1, '#fff2b0', true); // блестящий верх
+    const sparkle = pose === 'alert' && i ? [[22, cy - 3], [10, cy + 1]] : [[11, cy - 3], [21, cy + 2]];
+    for (const [x, y] of sparkle) { // блики-искорки
+      d.px(x, y, '#fffbe0', true);
+      d.px(x - 1, y, '#ffe680', true);
+      d.px(x + 1, y, '#ffe680', true);
+      d.px(x, y - 1, '#ffe680', true);
+      d.px(x, y + 1, '#ffe680', true);
+    }
+  },
 };
+
+const NO_SPROUT = new Set(['mushroom', 'moonMushroom']); // грибы вместо ростка рисуют сами себя (маленькую шляпку)
 
 export function drawPlantSheet() {
   const { frameW, frameH, cols } = PLANT_FRAME;
@@ -357,8 +497,8 @@ export function drawPlantSheet() {
       const d = sheet.frame(col, row, frameW, frameH);
       mound(d);
       if (stage === 0) { d.px(14, 35, C.seed); d.px(17, 36, C.seed); }
-      else if (stage === 1 && type !== 'mushroom') sprout(d);
-      else DRAW_PLANT[type](d, stage, pose, i);
+      else if (stage === 1 && !NO_SPROUT.has(artType(type))) sprout(d);
+      else artOf(DRAW_PLANT, type)(d, stage, pose, i);
     });
   });
   return sheet.finish();
@@ -403,11 +543,34 @@ const DRAW_HELD = {
   pumpkin(d) { d.ellipse(8, 9, 7, 5, C.pumpkin); d.line(5, 5, 5, 13, '#c86a14'); d.line(11, 5, 11, 13, '#c86a14'); d.rect(7, 2, 2, 3, C.stem); },
   sunflower(d) { d.line(8, 15, 8, 9, C.leaves); d.ellipse(8, 6, 5, 5, C.sunflowerPetals); d.ellipse(8, 6, 2.5, 2.5, C.sunflowerCenter); },
   mushroom(d) { d.ellipse(8, 8, 6, 3.5, C.mushroomCap, true); for (let x = 1; x < 15; x++) for (let y = 9; y < 12; y++) d.px(x, y, null); d.rect(6, 9, 4, 5, C.mushroomStem); },
+  fireroot(d) { d.line(3, 11, 11, 5, C.firerootRoot); d.line(3, 12, 11, 6, C.firerootRoot); d.line(4, 12, 12, 6, C.firerootRoot); d.line(12, 5, 14, 2, C.leaves); d.line(12, 6, 15, 5, C.leaves); d.px(14, 1, EMBER, true); d.px(15, 4, EMBER, true); },
+  lanternPumpkin(d) {
+    d.ellipse(8, 10, 6, 4.5, C.lanternPumpkin);
+    d.line(8, 5, 6, 2, C.leaves); d.line(8, 5, 10, 2, C.leaves);
+    d.rect(5, 9, 2, 1, '#ffb040', true); d.rect(10, 9, 2, 1, '#ffb040', true); d.rect(6, 12, 5, 1, '#ffb040', true);
+  },
+  sunPumpkin(d) {
+    d.ellipse(8, 10, 7, 4.5, C.sunPumpkin); d.line(5, 7, 5, 14, '#d08a1a'); d.line(11, 7, 11, 14, '#d08a1a');
+    for (const [x, y] of [[5, 4], [11, 4], [8, 2]]) d.ellipse(x, y, 1.5, 1.5, C.sunflowerPetals);
+    d.px(8, 4, C.sunflowerCenter);
+  },
+  moonMushroom(d) {
+    d.ellipse(8, 8, 6, 3.5, C.moonCap, true); for (let x = 1; x < 15; x++) for (let y = 9; y < 12; y++) d.px(x, y, null);
+    d.rect(6, 9, 4, 5, C.mushroomStem); d.ellipse(6, 6, 1.5, 1.5, '#fff8d0', true);
+  },
+  starbloom(d) {
+    for (let k = 0; k < 5; k++) { const a = ((-90 + 72 * k) * Math.PI) / 180; d.line(8, 8, 8 + Math.cos(a) * 6, 8 + Math.sin(a) * 6, C.starbloom, true); }
+    d.ellipse(8, 8, 1.5, 1.5, '#fff6c8', true);
+  },
+  goldPumpkin(d) {
+    d.ellipse(8, 9, 7, 5, C.goldPumpkin); d.line(5, 5, 5, 13, '#c9961a'); d.line(11, 5, 11, 13, '#c9961a'); d.rect(7, 2, 2, 3, C.stem);
+    d.px(10, 7, '#fffbe0', true);
+  },
 };
 
 export function drawHeldSheet() {
   const sheet = new PixelSheet(HELD_FRAME.frameW * PLANT_ORDER.length, HELD_FRAME.frameH);
-  PLANT_ORDER.forEach((type, col) => DRAW_HELD[type](sheet.frame(col, 0, 16, 16)));
+  PLANT_ORDER.forEach((type, col) => artOf(DRAW_HELD, type)(sheet.frame(col, 0, 16, 16)));
   return sheet.finish();
 }
 
@@ -419,7 +582,11 @@ export const TOOL_FRAME = { frameW: 16, frameH: 16, cols: Math.max(3, PLANT_ORDE
 export const TOOL_FRAMES = { water: [0, 0], basket: [1, 0], basketFront: [2, 0] }; // [колонка, строка]; water и basket — по инструменту
 export const SEED_BAG_ROW = 1;
 
-const SEED_LABEL = { carrot: C.carrot, radish: C.radish, pumpkin: C.pumpkin, sunflower: C.sunflowerPetals, mushroom: C.mushroomCap };
+const SEED_LABEL = {
+  carrot: C.carrot, radish: C.radish, pumpkin: C.pumpkin, sunflower: C.sunflowerPetals, mushroom: C.mushroomCap,
+  fireroot: C.firerootRoot, lanternPumpkin: C.lanternPumpkin, sunPumpkin: C.sunPumpkin, moonMushroom: C.moonCap,
+  starbloom: C.starbloom, goldPumpkin: C.goldPumpkin,
+};
 
 function drawCan(d) {
   d.line(4, 6, 9, 6, C.wateringCanDark);  // ручка сверху
@@ -462,7 +629,7 @@ export function drawToolSheet() {
   drawCan(sheet.frame(...TOOL_FRAMES.water, frameW, frameH));
   drawBasketBack(sheet.frame(...TOOL_FRAMES.basket, frameW, frameH));
   drawBasketFront(sheet.frame(...TOOL_FRAMES.basketFront, frameW, frameH));
-  PLANT_ORDER.forEach((type, col) => drawSeedBag(sheet.frame(col, SEED_BAG_ROW, frameW, frameH), SEED_LABEL[type] || C.seed));
+  PLANT_ORDER.forEach((type, col) => drawSeedBag(sheet.frame(col, SEED_BAG_ROW, frameW, frameH), artOf(SEED_LABEL, type) || C.seed));
   return sheet.finish();
 }
 

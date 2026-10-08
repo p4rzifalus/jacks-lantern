@@ -7,6 +7,12 @@ export function plural(n, [one, few, many]) {
   return `${n} ${many}`;
 }
 
+// «1 мин», «1,5 мин», «45 с»
+export function formatTime(seconds) {
+  if (seconds < 60) return `${Math.round(seconds)} с`;
+  return `${String(Math.round((seconds / 60) * 10) / 10).replace('.', ',')} мин`;
+}
+
 // Текст для вставки в HTML (например, имя файла): «<» и прочее — как обычные буквы
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);

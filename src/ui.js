@@ -1,5 +1,5 @@
 // Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, подсказки.
-import { plural } from './text.js';
+import { plural, formatTime } from './text.js';
 
 // Пиксельные значки 12×12: «#» — закрашенный пиксель, «.» — пусто
 const PIXEL_ICONS = {
@@ -185,12 +185,6 @@ function toolButton(key, icon, name) {
 
 // «2 места», «5 мест»
 const places = (n) => plural(n, ['место', 'места', 'мест']);
-
-// «1 мин», «1,5 мин», «45 с»
-function formatTime(seconds) {
-  if (seconds < 60) return `${Math.round(seconds)} с`;
-  return `${String(Math.round((seconds / 60) * 10) / 10).replace('.', ',')} мин`;
-}
 
 export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, onShopToggle, onCloseUp, onRotate, onMenu }) {
   // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка

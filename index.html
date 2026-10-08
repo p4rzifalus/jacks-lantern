@@ -88,7 +88,8 @@
       /* Ряд семян над панелью */
       .seed-row {
         position: fixed; left: 50%; bottom: 108px; transform: translateX(-50%);
-        display: none; gap: 8px; max-width: calc(100vw - 16px); overflow-x: auto; padding: 4px;
+        display: none; gap: 8px; width: max-content; max-width: min(720px, calc(100vw - 16px)); padding: 4px;
+        flex-wrap: wrap-reverse; justify-content: center; /* много семян — переносятся на строку выше */
       }
       .seed-row.visible { display: flex; }
       .seed-row button {
@@ -210,6 +211,8 @@
       .menu-sound input { flex: 1; accent-color: var(--amber); height: 28px; }
       .menu-sound input.dim { opacity: 0.4; }
       .menu-report { margin: 14px 0 18px; font-size: 14px; }
+      .menu-discovery { display: flex; justify-content: center; margin: 4px 0 6px; }
+      .menu-discovery img { width: 128px; height: 160px; image-rendering: pixelated; filter: drop-shadow(0 0 18px var(--amber-soft)); }
       .menu-report div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--edge); }
       .menu-report div:last-child { border-bottom: none; }
       .menu-report span { color: var(--text-dim); }

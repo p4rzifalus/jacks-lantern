@@ -1,5 +1,6 @@
 // Эффекты из частиц: полив, посадка, сбор урожая, монетки у корзинки,
-// пылинки в свете фонарей и светящиеся споры над спелыми грибами.
+// пылинки в свете фонарей, светящиеся споры над спелыми грибами, пыльца между растениями, из которых выйдет гибрид,
+// и вспышка, когда гибрид получился.
 import * as THREE from 'three';
 import { COLORS, EFFECTS } from '../config.js';
 import { ParticlePool } from '../render/particles.js';
@@ -17,6 +18,8 @@ export function createEffects(scene, quality, lanternLights) {
   const coins = new ParticlePool(scene, { count: 30, width: 0.1, material: glowMaterial('#f2c24a', 0.6) });
   const dust = new ParticlePool(scene, { count: Math.ceil(40 * k), width: 0.025, material: glowMaterial('#ffe6b0', 0.5) });
   const spores = new ParticlePool(scene, { count: Math.ceil(50 * k), width: 0.035, material: glowMaterial(COLORS.mushroomCap, 1) });
+  const pollen = new ParticlePool(scene, { count: Math.ceil(60 * k), width: 0.03, material: glowMaterial('#ffe9a8', 0.7) });
+  const stars = new ParticlePool(scene, { count: 80, width: 0.06, material: glowMaterial('#fff4c8', 1.4) });
 
   const splashAt = (pos, n = 4) => {
     for (let i = 0; i < n; i++) {
@@ -29,6 +32,7 @@ export function createEffects(scene, quality, lanternLights) {
   };
 
   let sporeTimer = 0;
+  let pollenTimer = 0;
   let dustTimer = 0;
 
   return {
@@ -71,6 +75,20 @@ export function createEffects(scene, quality, lanternLights) {
       }
     },
 
+    // Получилось семя гибрида: звёздочки закручиваются спиралью вверх (первый раз — пышнее)
+    discovery(at, first) {
+      const n = first ? 60 : 24;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 6;
+        const r = rand(0.15, 0.35);
+        stars.spawn({
+          pos: at.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.2 + (i / n) * 0.4, Math.sin(a) * r)),
+          vel: new THREE.Vector3(Math.cos(a + 1.6) * 0.6, rand(1, first ? 2.4 : 1.6), Math.sin(a + 1.6) * 0.6),
+          life: rand(0.9, first ? 1.8 : 1.2), size: rand(0.7, 1.3), gravity: 0, spin: rand(-4, 4),
+        });
+      }
+    },
+
     // Корзинка: монетки подпрыгивают и падают обратно
     coins(at) {
       for (let i = 0; i < 6; i++) {
@@ -84,7 +102,21 @@ export function createEffects(scene, quality, lanternLights) {
 
     // ripeMushrooms — точки спелых грибов; visibility — насколько видно (дождь гасит пылинки и споры);
     // lamps — горят ли фонари (днём пылинок в их свете нет)
-    update(dt, { ripeMushrooms = [], visibility = 1, lamps = 1 } = {}) {
+    // pollenPairs — пары точек [a, b]: спелые соседи, из которых может выйти гибрид
+    update(dt, { ripeMushrooms = [], pollenPairs = [], visibility = 1, lamps = 1 } = {}) {
+      // пыльца: пылинки медленно перелетают между растениями пары
+      pollenTimer -= dt;
+      if (pollenPairs.length && pollenTimer <= 0 && visibility > 0.3) {
+        pollenTimer = EFFECTS.pollenEvery / pollenPairs.length;
+        const [a, b] = pollenPairs[Math.floor(Math.random() * pollenPairs.length)];
+        const [from, to] = Math.random() < 0.5 ? [a, b] : [b, a];
+        const life = rand(1.6, 2.4);
+        pollen.spawn({
+          pos: from.clone().add(new THREE.Vector3(rand(-0.1, 0.1), rand(0.45, 0.65), rand(-0.1, 0.1))),
+          vel: to.clone().sub(from).divideScalar(life).setY(rand(0.02, 0.08)),
+          life, size: rand(0.7, 1.2), gravity: 0,
+        });
+      }
       // споры поднимаются над спелыми грибами
       sporeTimer -= dt;
       if (ripeMushrooms.length && sporeTimer <= 0 && visibility > 0.3) {
@@ -115,6 +147,8 @@ export function createEffects(scene, quality, lanternLights) {
       coins.update(dt, (p, t) => (t > 0.8 ? (1 - t) * 5 : 1));
       dust.update(dt, (p, t) => Math.sin(Math.PI * t) * visibility * lamps);
       spores.update(dt, (p, t) => Math.sin(Math.PI * t) * (0.8 + 0.2 * Math.sin(p.age * 8)));
+      pollen.update(dt, (p, t) => Math.sin(Math.PI * t) * visibility * (0.7 + 0.3 * Math.sin(p.age * 6)));
+      stars.update(dt, (p, t) => Math.sin(Math.PI * Math.min(1, t * 1.2)) * (0.75 + 0.25 * Math.sin(p.age * 14)));
     },
   };
 }

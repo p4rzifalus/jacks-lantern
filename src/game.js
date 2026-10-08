@@ -1,12 +1,15 @@
 // Правила игры: инструменты, семена, монеты, магазин, открытие новых семян.
 // Здесь нет графики — только состояние и действия. Картинка узнаёт о переменах через колбэки.
-import { PLANTS, BASKET_CELL, HAND_BASKET, GROWTH_SPEED, WILTED_SELL_SHARE, WEATHER } from './config.js';
+import { PLANTS, BASKET_CELL, HAND_BASKET, GROWTH_SPEED, WILTED_SELL_SHARE, WEATHER, CROSSING } from './config.js';
 import { isInGarden } from './grid.js';
 import { GardenState, EMPTY, RIPE } from './garden.js';
 import { plural } from './text.js';
 
 export const TOOL_IDS = ['seeds', 'water', 'basket'];
 const PLANT_TYPES = Object.keys(PLANTS);
+const isHybrid = (type) => !!PLANTS[type].hybrid;
+const HYBRIDS = PLANT_TYPES.filter(isHybrid);
+const NEIGHBORS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // «5 морковок», «3 тыквы», «1 гриб»
 export const countOf = (type, n) => plural(n, PLANTS[type].forms);
@@ -29,12 +32,14 @@ export function createGame({ onHint, onEffect, onChange }) {
     carried: [],    // что собрано в корзинку для сбора: [{ type: 'carrot', wilted: false }, ...] (wilted — отстоял ночь на страже)
     basketLevel: 0, // сколько раз корзинку улучшили в магазине
     embers: 0,      // огоньки — от прогнанных ночью духов
+    discovered: [], // какие гибриды уже выведены (их семена — только скрещиванием)
     shopOpen: false,
   };
 
   const isFree = (type) => PLANTS[type].seedPrice === 0;
   const seedCount = (type) => (isFree(type) ? Infinity : state.seeds[type] || 0);
   const isUnlocked = (type) => {
+    if (isHybrid(type)) return state.discovered.includes(type);
     const unlock = PLANTS[type].unlock;
     return !unlock || (state.harvested[unlock.plant] || 0) >= unlock.count;
   };
@@ -46,6 +51,23 @@ export function createGame({ onHint, onEffect, onChange }) {
   // Выбранные семена кончились или ещё не открыты — берём бесплатные
   function checkSelectedSeed() {
     if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) state.selectedSeed = 'carrot';
+  }
+
+  // Скрещивание: какой гибрид может получиться при сборе растения type с клетки c — от спелых соседей подходящего вида
+  // (null — не повезло или пары рядом нет). Если подходящих соседей несколько — один из них наугад
+  function crossSeed(c, type) {
+    const options = [];
+    for (const [dx, dz] of NEIGHBORS) {
+      const n = { x: c.x + dx, z: c.z + dz };
+      if (!isInGarden(n) || garden.stage(n) !== RIPE) continue;
+      const other = garden.cell(n).plant;
+      for (const h of HYBRIDS) {
+        const [a, b] = PLANTS[h].hybrid;
+        if ((a === type && b === other) || (b === type && a === other)) options.push(h);
+      }
+    }
+    if (!options.length || Math.random() >= CROSSING.chance) return null;
+    return options[Math.floor(Math.random() * options.length)];
   }
 
   let rainCarry = 0; // доли грядки, которые дождь «намочил» между кадрами
@@ -74,10 +96,18 @@ export function createGame({ onHint, onEffect, onChange }) {
       if (stage === EMPTY) return onHint('Здесь пусто');
       if (stage !== RIPE) return onHint(garden.isWet(c) ? 'Ещё растёт' : 'Сначала полей');
       if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине у дома');
-      const wilted = garden.cell(c).nights > 0;
+      const cell = garden.cell(c);
+      const wilted = cell.nights > 0;
+      const hybrid = crossSeed(c, cell.plant);
       state.carried.push({ type: garden.harvest(c), wilted });
       onEffect('harvested', c);
-      if (wilted) onHint('Вялый — отстоял ночь на страже, продастся за полцены');
+      if (hybrid) {
+        const first = !state.discovered.includes(hybrid);
+        if (first) state.discovered.push(hybrid);
+        state.seeds[hybrid] = (state.seeds[hybrid] || 0) + 1;
+        onEffect('hybrid', c, { type: hybrid, first });
+        onHint(first ? `Новое растение — ${PLANTS[hybrid].name}! Семя уже в мешочке` : `+1 семя: ${PLANTS[hybrid].name}`, first ? 4000 : 2000);
+      } else if (wilted) onHint('Вялый — отстоял ночь на страже, продастся за полцены');
     }
   }
 
@@ -124,7 +154,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     },
     buySeeds(type, count) {
       const cost = PLANTS[type].seedPrice * count;
-      if (!isUnlocked(type) || state.coins < cost) return false;
+      if (isHybrid(type) || !isUnlocked(type) || state.coins < cost) return false;
       state.coins -= cost;
       state.seeds[type] = (state.seeds[type] || 0) + count;
       state.selectedSeed = type; // сразу готовы сажать купленное
@@ -234,7 +264,7 @@ export function createGame({ onHint, onEffect, onChange }) {
         seedOptions: PLANT_TYPES
           .filter((type) => isUnlocked(type) && seedCount(type) > 0)
           .map((type) => ({ type, name: PLANTS[type].name, count: isFree(type) ? '∞' : seedCount(type) })),
-        shop: PLANT_TYPES.map((type) => {
+        shop: PLANT_TYPES.filter((type) => !isHybrid(type)).map((type) => {
           const p = PLANTS[type];
           const unlock = p.unlock;
           return {
@@ -255,10 +285,29 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     hasHarvest: () => Object.values(state.harvested).some((n) => n > 0),
 
+    // Пары спелых соседей, из которых может выйти гибрид: [[клетка, клетка], ...] (для пыльцы между ними)
+    crossPairs() {
+      const pairs = [];
+      for (const c of garden.cells) {
+        if (garden.stage(c) !== RIPE) continue;
+        for (const [dx, dz] of [[1, 0], [0, 1]]) { // вправо и вниз — каждая пара по разу
+          const n = { x: c.x + dx, z: c.z + dz };
+          if (!isInGarden(n) || garden.stage(n) !== RIPE) continue;
+          const other = garden.cell(n).plant;
+          const match = HYBRIDS.some((h) => {
+            const [a, b] = PLANTS[h].hybrid;
+            return (a === c.plant && b === other) || (b === c.plant && a === other);
+          });
+          if (match) pairs.push([{ x: c.x, z: c.z }, n]);
+        }
+      }
+      return pairs;
+    },
+
     // Для сохранения (позицию героя добавляет main.js)
     toSave() {
-      const { coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed } = state;
-      return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed };
+      const { coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered } = state;
+      return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed, discovered };
     },
     load(saved) {
       // файл могли поправить руками — все числа приводим к целым неотрицательным
@@ -270,6 +319,7 @@ export function createGame({ onHint, onEffect, onChange }) {
       state.seeds = counts(saved.seeds);
       state.harvested = counts(saved.harvested);
       state.basketLevel = Math.min(count(saved.basketLevel), HAND_BASKET.length - 1);
+      state.discovered = (Array.isArray(saved.discovered) ? saved.discovered : []).filter((t) => PLANTS[t] && isHybrid(t));
       if (TOOL_IDS.includes(saved.tool)) state.tool = saved.tool;
       if (PLANTS[saved.selectedSeed]) state.selectedSeed = saved.selectedSeed;
       checkSelectedSeed();

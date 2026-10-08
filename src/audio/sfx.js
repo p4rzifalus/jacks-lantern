@@ -161,6 +161,19 @@ export function createSfx(engine) {
       });
     },
 
+    // Получилось семя гибрида: волшебный перезвон. first — гибрид выведен впервые: дольше, с мерцанием
+    hybrid(first) {
+      if (!ready()) return;
+      const t = now() + 0.15; // после звука сбора
+      const notes = first ? [79, 83, 86, 91, 88, 95] : [86, 91];
+      notes.forEach((n, i) => {
+        const when = t + i * (first ? 0.13 : 0.09);
+        tone(engine, FX, { when, freq: noteHz(n), type: 'sine', gain: first ? 0.1 : 0.07, decay: first ? 1.2 : 0.6, reverb: 0.7 });
+        tone(engine, FX, { when, freq: noteHz(n) * 2.01, gain: 0.02, decay: 0.5, reverb: 0.7 }); // колокольчиковый обертон
+      });
+      if (first) noise(engine, FX, { when: t, type: 'highpass', freq: 6000, gain: 0.05, attack: 0.3, decay: 1.2, reverb: 0.6 }); // мерцание
+    },
+
     // Шаг героя по песку: лёгкое «шшк» и россыпь песчинок, без низкого удара.
     // По грядке — чуть глуше и мягче, по дорожке — светлее и суше.
     step(onSoil) {
