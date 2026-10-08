@@ -29,16 +29,16 @@ const HELD_OFFSET = {
 const CROP_SCALE = 0.55;
 const CROP_SPOTS = [[-3, 5.5], [3, 6], [0, 7.5]];
 
-// Круг света фонаря на земле: ровная тёплая заливка и ярче к краю — видно, докуда достаёт свет
+// Пятно света фонаря на земле: мягко гаснет к краю — видно, докуда достаёт свет
 function lanternRingTexture() {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, 'rgba(255,255,255,0.55)');
-  g.addColorStop(0.7, 'rgba(255,255,255,0.3)');
-  g.addColorStop(0.9, 'rgba(255,255,255,0.75)');
+  g.addColorStop(0, 'rgba(255,255,255,0.6)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+  g.addColorStop(0.85, 'rgba(255,255,255,0.15)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);

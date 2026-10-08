@@ -16,7 +16,7 @@ export const SIDES = ['south', 'east', 'west', 'north'];
 // «1 монету», «3 монеты», «12 монет»
 export const coinsOf = (n) => plural(n, ['монету', 'монеты', 'монет']);
 
-// Какая по счёту ночь (0 — первая) → { spirits, kinds, sides, waves }. После списка — как последняя, но духов больше
+// Какая по счёту ночь (0 — первая) → { spirits, kinds, sides }. После списка — как последняя, но духов больше
 export function nightPlan(index) {
   const last = NIGHTS.length - 1;
   const plan = NIGHTS[Math.min(index, last)];
@@ -108,11 +108,14 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     onHit?.(spirit, from);
   }
 
-  // Фонарь енота: духи в его свете понемногу теряют смелость (призраки — быстро, скелеты — еле-еле)
+  // Фонарь енота: духи в его свете понемногу теряют смелость (призраки — быстро, скелеты — еле-еле).
+  // Шаг они не сбивают (lit — для картинки: бледнеют, но идут дальше), так что за духом приходится идти
   function lantern(dt, heroAt, targets) {
+    for (const s of targets) s.lit = false;
     if (!heroAt) return;
     for (const s of targets) {
       if (dist(s.at, heroAt) > LANTERN.radius) continue;
+      s.lit = true;
       s.courage -= LANTERN.power * (LANTERN.fear[s.kind] ?? 1) * dt;
       s.hitBy = null; // напугал фонарь, а не растение
     }
@@ -163,7 +166,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     }
   }
 
-  // Расписание ночи: духи приходят волнами (в волне — по одному с короткой паузой), волны — через равные промежутки
+  // Расписание ночи: духи приходят по одному, через примерно равные промежутки (чуть случайно, чтобы не по часам)
   function startNight() {
     active = true;
     reset();
@@ -171,15 +174,11 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     plan = nightPlan(game.state.nightsSeen);
     const sides = SIDES.slice(0, plan.sides);
     const nightSeconds = (DAY_CYCLE.phases.find((p) => p.id === 'night').minutes * 60) / DAY_CYCLE.speed;
-    const span = nightSeconds * 0.7 - SPIRITS.firstDelay; // последняя волна — не позже 70 % ночи
-    const perWave = Math.ceil(plan.spirits / plan.waves);
+    const gap = (nightSeconds * SPIRITS.spread - SPIRITS.firstDelay) / plan.spirits;
     queue = [];
     for (let i = 0; i < plan.spirits; i++) {
-      const wave = Math.floor(i / perWave);
-      const inWave = i % perWave;
-      const start = SPIRITS.firstDelay + (plan.waves > 1 ? (span * wave) / (plan.waves - 1) : 0);
       queue.push({
-        at: start + inWave * rand(...SPIRITS.inWave),
+        at: SPIRITS.firstDelay + gap * (i + rand(-0.3, 0.3)),
         kind: pickKind(plan.kinds),
         from: { side: sides[Math.floor(Math.random() * sides.length)], t: rand(0.1, 0.9) },
       });

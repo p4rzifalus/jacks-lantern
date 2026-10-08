@@ -34,8 +34,8 @@ function puddleTexture() {
 
 export function createWeather(scene, quality, lighting, islandCore) {
   // Капли: вытянутые штрихи
-  const rainMat = new THREE.MeshBasicMaterial({ color: WEATHER.rainColor, transparent: true, opacity: 0.35, depthWrite: false, fog: false });
-  const drops = new ParticlePool(scene, { count: Math.ceil(WEATHER.drops * quality.particles), width: 0.015, height: 0.35, material: rainMat });
+  const rainMat = new THREE.MeshBasicMaterial({ color: WEATHER.rainColor, transparent: true, opacity: WEATHER.rainOpacity, depthWrite: false, fog: false });
+  const drops = new ParticlePool(scene, { count: Math.ceil(WEATHER.drops * quality.particles), width: 0.02, height: 0.4, material: rainMat });
   const splashMat = new THREE.MeshBasicMaterial({ color: WEATHER.rainColor, transparent: true, opacity: 0.6, depthWrite: false });
   const splashes = new ParticlePool(scene, { count: 200, width: 0.05, height: 0.03, material: splashMat });
 

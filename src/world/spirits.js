@@ -201,8 +201,9 @@ export function createSpirits(scene, camera, island, night, hooks = {}) {
       // где дух для правил: растения бьют только тех, кто идёт по огороду, тянет добычу или уходит
       const reachable = s.state === 'go' || s.state === 'grab' || s.state === 'leave';
       s.spirit.at = reachable && !s.spirit.fled ? { x: pos.x / CELL_SIZE + OFFSET, z: cellZ(pos) } : null;
-      // удар попал: вздрагивает (фонарь отнимает смелость понемногу — вздрагивает, когда набралось заметно)
-      if (s.courage - s.spirit.courage > 0.25) { s.courage = s.spirit.courage; s.flinch = 1; }
+      // удар растения: вздрагивает и на миг сбивается с шага; свет фонаря — только бледнеет, идёт дальше
+      if (s.spirit.lit) s.courage = Math.min(s.courage, s.spirit.courage);
+      else if (s.courage - s.spirit.courage > 0.25) { s.courage = s.spirit.courage; s.flinch = 1; }
       s.flinch = Math.max(0, s.flinch - dt * 4);
       // смелость кончилась: испугался — роняет добычу, убегает
       if (reachable && s.spirit.courage <= 0 && !s.spirit.fled) {

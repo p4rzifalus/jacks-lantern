@@ -62,20 +62,21 @@ export function createDaytime() {
       return time >= night.start ? (time - night.start) / night.seconds : null;
     },
 
-    // Между какими частями суток сейчас переход: вид каждой части — в её середине,
-    // между серединами плавно перетекает. → { from, to, t } (t — 0..1, уже сглажено)
+    // Как сейчас выглядят сутки: каждая часть держит свой вид почти всё время, а в соседнюю перетекает
+    // только у границы — за DAY_CYCLE.transitionSeconds (половина до границы, половина после).
+    // Так табло и картинка не расходятся: «вечер» — значит, вечерний свет. → { from, to, t } (t — 0..1, сглажено)
     blend() {
-      const mids = phases.map((p) => p.start + p.seconds / 2);
-      for (let i = 0; i < phases.length; i++) {
-        const a = mids[i];
-        const b = i + 1 < phases.length ? mids[i + 1] : mids[0] + total;
-        const t = time < mids[0] ? time + total : time; // до середины утра — ещё переход из ночи
-        if (t >= a && t < b) {
-          const x = (t - a) / (b - a);
-          return { from: phases[i].id, to: phases[(i + 1) % phases.length].id, t: x * x * (3 - 2 * x) };
-        }
-      }
-      return { from: phases[0].id, to: phases[0].id, t: 0 };
+      const i = Math.max(0, phases.findIndex((ph) => time >= ph.start && time < ph.start + ph.seconds));
+      const p = phases[i];
+      const prev = phases[(i + phases.length - 1) % phases.length];
+      const next = phases[(i + 1) % phases.length];
+      const edge = Math.min(DAY_CYCLE.transitionSeconds / 2, p.seconds / 2);
+      const into = time - p.start;
+      const left = p.start + p.seconds - time;
+      const s = (x) => x * x * (3 - 2 * x);
+      if (into < edge) return { from: prev.id, to: p.id, t: s(0.5 + into / (2 * edge)) };
+      if (left < edge) return { from: p.id, to: next.id, t: s(0.5 - left / (2 * edge)) };
+      return { from: p.id, to: p.id, t: 0 };
     },
   };
 }
