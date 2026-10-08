@@ -236,9 +236,9 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
       const loot = spirit.loot;
       spirit.loot = null;
       if (loot?.crop) {
-        const back = game.returnCrop(spirit.target.cell, loot.crop, loot.nights);
-        if (back) lost.crops[loot.crop]--;
-        return back ? { crop: loot.crop } : null;
+        game.returnCrop(spirit.target.cell, loot.crop, loot.nights);
+        lost.crops[loot.crop]--;
+        return { crop: loot.crop };
       }
       if (loot?.coins) {
         game.returnCoins(loot.coins);

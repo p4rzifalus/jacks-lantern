@@ -195,8 +195,9 @@ if (saved) {
   game.load(saved);
   const pos = saved.hero || saved.mole; // в старых сохранениях место героя записано как «mole»
   if (pos) {
-    hero.position.set(pos.x, 0, pos.z);
-    hero.heading = hero.targetHeading = pos.heading;
+    const num = (n) => (Number.isFinite(n) ? n : 0); // файл могли поправить руками
+    hero.position.set(num(pos.x), 0, num(pos.z));
+    hero.heading = hero.targetHeading = num(pos.heading);
     hero.collide(world); // на случай, если огород поменялся
   }
 }
@@ -263,6 +264,7 @@ menu = createMenu({
   },
   onOpenChange(open) {
     input.enabled = !open; // пока открыто меню, герой стоит
+    if (open) hero.walkPath([], null); // и не доходит до клетки, по которой щёлкнули перед этим
     if (!open) save();
   },
 });
@@ -321,10 +323,9 @@ window.addEventListener('keydown', (e) => {
     else if (game.state.shopOpen) toggleShop(false);
     else menu.open();
   }
-  if (menu.isOpen) return; // в меню клавиши игры не работают
+  if (menu.isOpen || e.repeat) return; // в меню клавиши игры не работают; зажатая клавиша срабатывает один раз
   if (e.code === 'KeyM') sound.engine.toggle('music');   // M — музыка
   if (e.code === 'KeyN') sound.engine.toggle('effects'); // N — звуки
-  if (e.repeat) return;
   if (e.code === 'KeyZ') toggleCloseUp();                 // Z — крупный план
   if (e.code === 'KeyQ') rotateWorld(-1);                 // Q / E — повернуть мир
   if (e.code === 'KeyE') rotateWorld(1);

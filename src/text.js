@@ -6,3 +6,8 @@ export function plural(n, [one, few, many]) {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} ${few}`;
   return `${n} ${many}`;
 }
+
+// Текст для вставки в HTML (например, имя файла): «<» и прочее — как обычные буквы
+export function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+}

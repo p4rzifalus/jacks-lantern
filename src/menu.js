@@ -1,6 +1,7 @@
 // Стартовый экран и меню игры (кнопка в левом верхнем углу или Esc):
 // продолжить / новая игра / сохранить в файл / загрузить из файла, звук и музыка.
 import { canOverwrite, saveToFile, openSaveFile, lastFileInfo, hasOwnFile } from './save-file.js';
+import { escapeHtml } from './text.js';
 
 // «28 сентября, 21:15»
 function formatDate(time) {
@@ -45,7 +46,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   };
   const fileLine = () => {
     const info = lastFileInfo();
-    return info ? `Последний файл: ${info.name} · ${formatDate(info.savedAt)}` : '';
+    return info ? `Последний файл: ${escapeHtml(info.name)} · ${formatDate(info.savedAt)}` : '';
   };
 
   // ---------- Окно-вопрос ----------
@@ -101,7 +102,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     const replacing = screen === 'menu' || hasSave;
     if (replacing) {
       const answer = await ask(
-        `Загрузить огород из файла «${result.name}» (сохранён ${formatDate(result.data.savedAt)})?<br>Нынешний огород заменится.`,
+        `Загрузить огород из файла «${escapeHtml(result.name)}» (сохранён ${formatDate(result.data.savedAt)})?<br>Нынешний огород заменится.`,
         [{ label: 'Загрузить', value: true, primary: true }, { label: 'Отмена', value: false }],
       );
       if (!answer) return;
@@ -152,7 +153,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
           <button class="${hasSave ? '' : 'primary'}" data-act="new">Новая игра</button>
           <button data-act="load">Загрузить из файла</button>
         </div>
-        <div class="menu-status">${statusText}</div>`;
+        <div class="menu-status">${escapeHtml(statusText)}</div>`;
     } else if (name === 'menu') {
       card.innerHTML = `
         <div class="menu-head"><span class="title">Меню</span><button class="menu-close" data-act="close" aria-label="Закрыть">✕</button></div>
@@ -167,7 +168,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
           <button data-act="new">Новая игра</button>
         </div>
         <div class="menu-file">${fileLine()}</div>
-        <div class="menu-status">${statusText}</div>
+        <div class="menu-status">${escapeHtml(statusText)}</div>
         <div class="menu-buttons"><button class="primary" data-act="close">Продолжить</button></div>`;
       if (canOverwrite) hasOwnFile().then((own) => { const b = card.querySelector('[data-act="save-new"]'); if (b) b.hidden = !own; });
     }

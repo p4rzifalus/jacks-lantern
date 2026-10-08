@@ -133,13 +133,20 @@ export async function openSaveFile() {
 }
 
 // Обычный выбор файла (телефон, Safari)
+// Старый Safari не сообщает, что окно выбора закрыли без файла, — тогда ждём возврата фокуса на страницу
 function pickWithInput() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.addEventListener('change', () => resolve(input.files[0] || null));
-    input.addEventListener('cancel', () => resolve(null));
+    const done = (file) => {
+      window.removeEventListener('focus', onFocus);
+      resolve(file);
+    };
+    const onFocus = () => setTimeout(() => done(input.files[0] || null), 1000); // «change» может прийти чуть позже фокуса
+    input.addEventListener('change', () => done(input.files[0] || null));
+    input.addEventListener('cancel', () => done(null));
+    window.addEventListener('focus', onFocus);
     input.click();
   });
 }

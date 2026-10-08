@@ -23,7 +23,7 @@ export class GardenState {
     if (!cell.plant) return EMPTY;
     if (!cell.wateredAt) return 0;
     const stageMs = (PLANTS[cell.plant].stageSeconds * 1000) / GROWTH_SPEED;
-    return Math.min(RIPE, Math.floor((now - cell.wateredAt) / stageMs));
+    return Math.max(0, Math.min(RIPE, Math.floor((now - cell.wateredAt) / stageMs))); // часы устройства могли отставать — не меньше 0
   }
 
   isWatered(c) {
@@ -63,9 +63,15 @@ export class GardenState {
   }
 
   load(saved) {
-    for (const { x, z, plant, wateredAt, nights = 0 } of saved) {
+    const now = Date.now();
+    for (const { x, z, plant, wateredAt, nights } of saved) {
       if (x >= 0 && x < GARDEN_SIZE && z >= 0 && z < GARDEN_SIZE && PLANTS[plant]) {
-        Object.assign(this.cell({ x, z }), { plant, wateredAt, nights });
+        Object.assign(this.cell({ x, z }), {
+          plant,
+          // сохранение с устройства, где часы спешат: время полива из «будущего» — считаем, что полили сейчас
+          wateredAt: Number.isFinite(wateredAt) && wateredAt > 0 ? Math.min(wateredAt, now) : null,
+          nights: Math.max(0, Number(nights) || 0),
+        });
       }
     }
   }

@@ -104,11 +104,13 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
     press = null;
     if (wasDrag) return;
     const cell = cellAt(e);
-    input.hoverCell = cell;
+    input.hoverCell = e.pointerType === 'mouse' ? cell : null; // пальцем не «наводят» — рамка не залипает
     if (cell) handlers.onCellClick?.(cell);
   });
 
-  canvas.addEventListener('pointercancel', () => { press = null; });
+  canvas.addEventListener('pointercancel', (e) => {
+    if (press && e.pointerId === press.id) press = null;
+  });
   canvas.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'mouse' && !press) input.hoverCell = null;
   });

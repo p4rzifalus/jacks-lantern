@@ -1,6 +1,6 @@
 // Правила игры: инструменты, семена, монеты, магазин, открытие новых семян.
 // Здесь нет графики — только состояние и действия. Картинка узнаёт о переменах через колбэки.
-import { PLANTS, BASKET_CELL, HAND_BASKET } from './config.js';
+import { PLANTS, BASKET_CELL, HAND_BASKET, GROWTH_SPEED } from './config.js';
 import { isInGarden } from './grid.js';
 import { GardenState, EMPTY, RIPE } from './garden.js';
 import { plural } from './text.js';
@@ -40,8 +40,13 @@ export function createGame({ onHint, onEffect, onChange }) {
   const capacity = () => HAND_BASKET[state.basketLevel].capacity;
   const nextUpgrade = () => HAND_BASKET[state.basketLevel + 1] || null;
 
-  function changed() {
+  // Выбранные семена кончились или ещё не открыты — берём бесплатные
+  function checkSelectedSeed() {
     if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) state.selectedSeed = 'carrot';
+  }
+
+  function changed() {
+    checkSelectedSeed();
     onChange();
   }
 
@@ -52,6 +57,7 @@ export function createGame({ onHint, onEffect, onChange }) {
 
     if (state.tool === 'seeds') {
       if (stage !== EMPTY) return onHint('Здесь уже посажено');
+      if (seedCount(state.selectedSeed) <= 0) return onHint('Семена кончились — купи в магазине');
       garden.plant(c, state.selectedSeed);
       if (!isFree(state.selectedSeed)) state.seeds[state.selectedSeed]--;
       onEffect('planted', c);
@@ -145,11 +151,18 @@ export function createGame({ onHint, onEffect, onChange }) {
       changed();
       return type;
     },
-    // Дух испугался и уронил добычу: урожай — обратно на грядку спелым (если свободна), монеты — в корзинку
+    // Дух испугался и уронил добычу: урожай — обратно на грядку спелым. Если грядку уже заняли —
+    // в корзинку для сбора, а если и она полна — засчитываем как проданный. Монеты — в большую корзину
     returnCrop(c, type, nights) {
-      const ok = garden.putBackRipe(c, type, nights);
-      if (ok) changed();
-      return ok;
+      if (!garden.putBackRipe(c, type, nights)) {
+        if (state.carried.length < capacity()) state.carried.push(type);
+        else {
+          state.coins += PLANTS[type].sellPrice;
+          state.harvested[type] = (state.harvested[type] || 0) + 1;
+        }
+      }
+      changed();
+      return true;
     },
     returnCoins(n) {
       state.coins += n;
@@ -211,7 +224,7 @@ export function createGame({ onHint, onEffect, onChange }) {
             seedPrice: p.seedPrice,
             defense: p.defense,
             sellPrice: p.sellPrice,
-            growSeconds: p.stageSeconds * 3,
+            growSeconds: (p.stageSeconds * RIPE) / GROWTH_SPEED,
             owned: seedCount(type),
             condition: unlock && `собери ${countOf(unlock.plant, unlock.count)} (есть ${state.harvested[unlock.plant] || 0})`,
           };
@@ -227,15 +240,19 @@ export function createGame({ onHint, onEffect, onChange }) {
       return { cells: garden.toSave(), coins, embers, seeds, harvested, carried, basketLevel, tool, selectedSeed };
     },
     load(saved) {
-      garden.load(saved.cells || []);
-      state.coins = saved.coins || 0;
-      state.embers = saved.embers || 0;
-      state.seeds = saved.seeds || {};
-      state.harvested = saved.harvested || {};
-      state.basketLevel = Math.min(saved.basketLevel || 0, HAND_BASKET.length - 1);
+      // файл могли поправить руками — все числа приводим к целым неотрицательным
+      const count = (n) => Math.max(0, Math.floor(Number(n)) || 0);
+      const counts = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([t]) => PLANTS[t]).map(([t, n]) => [t, count(n)]));
+      garden.load(Array.isArray(saved.cells) ? saved.cells : []);
+      state.coins = count(saved.coins);
+      state.embers = count(saved.embers);
+      state.seeds = counts(saved.seeds);
+      state.harvested = counts(saved.harvested);
+      state.basketLevel = Math.min(count(saved.basketLevel), HAND_BASKET.length - 1);
       if (TOOL_IDS.includes(saved.tool)) state.tool = saved.tool;
       if (PLANTS[saved.selectedSeed]) state.selectedSeed = saved.selectedSeed;
-      state.carried = (saved.carried || []).filter((t) => PLANTS[t]).slice(0, capacity());
+      checkSelectedSeed();
+      state.carried = (Array.isArray(saved.carried) ? saved.carried : []).filter((t) => PLANTS[t]).slice(0, capacity());
     },
   };
 }

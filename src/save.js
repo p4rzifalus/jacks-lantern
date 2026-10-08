@@ -1,6 +1,7 @@
 // Сохранение игры в браузере (localStorage). Без сервера.
 // Тот же набор данных пишется и в файл (см. save-file.js), поэтому формат — в одном месте.
 const KEY = 'ogorod2-save'; // своё имя: у первой версии на том же сайте — своё сохранение
+const BACKUP_KEY = 'ogorod2-save-backup'; // сюда откладываем сохранение, которое не смогли прочитать
 const VERSION = 3; // меняется, когда меняется формат сохранения
 const GAME = 'osennyaya-ferma-2'; // метка в файле, чтобы не спутать с чужим
 
@@ -10,13 +11,22 @@ export function packSave(state) {
 }
 
 export function loadGame() {
+  let text = null;
   try {
-    const data = JSON.parse(localStorage.getItem(KEY));
-    if (!data) return null;
-    return upgrade(data);
-  } catch {
-    return null; // сохранения нет или браузер не даёт читать — начинаем с нуля
-  }
+    text = localStorage.getItem(KEY);
+    const data = text && upgrade(JSON.parse(text));
+    if (data) return data;
+  } catch { /* испорченное сохранение или браузер не даёт читать */ }
+  // сохранение есть, но прочитать не смогли (например, оно от более новой версии игры) —
+  // откладываем копию, прежде чем игра запишет поверх новый огород
+  if (text) storeRaw(BACKUP_KEY, text);
+  return null;
+}
+
+function storeRaw(key, text) {
+  try {
+    localStorage.setItem(key, text);
+  } catch { /* браузер не даёт сохранять */ }
 }
 
 // Старые сохранения переводим в новый формат, шаг за шагом
@@ -53,9 +63,7 @@ export function saveGame(state) {
 
 // Записать готовое сохранение (например, из файла) — игра подхватит его при следующем запуске
 export function storeSave(data) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(data));
-  } catch { /* браузер не даёт сохранять — играем без сохранения */ }
+  storeRaw(KEY, JSON.stringify(data)); // браузер не даёт сохранять — играем без сохранения
 }
 
 export function clearSave() {
