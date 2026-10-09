@@ -75,11 +75,12 @@ export function createEffects(scene, quality, lanternLights) {
       }
     },
 
-    // Спелое растение изредка поблёскивает: пара медленных искорок — «меня можно собрать»
-    glint(at) {
-      for (let i = 0; i < 3; i++) {
+    // Спелое растение изредка поблёскивает: пара медленных искорок — «меня можно собрать».
+    // Так же зовут грядка-подсказка и большая корзина: spread — на сколько искорки разбросаны вокруг, low — от земли
+    glint(at, { spread = 0.2, count = 3, low = 0.3 } = {}) {
+      for (let i = 0; i < count; i++) {
         sparks.spawn({
-          pos: at.clone().add(new THREE.Vector3(rand(-0.2, 0.2), rand(0.3, 0.6), rand(-0.2, 0.2))),
+          pos: at.clone().add(new THREE.Vector3(rand(-spread, spread), rand(low, low + 0.3), rand(-spread, spread))),
           vel: new THREE.Vector3(rand(-0.1, 0.1), rand(0.3, 0.6), rand(-0.1, 0.1)),
           life: rand(0.6, 0.9), size: rand(0.5, 0.8), gravity: 0, spin: rand(-3, 3),
         });

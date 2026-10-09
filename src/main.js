@@ -223,6 +223,8 @@ const attacks = createAttacks(scene, (spirit) => spirits.positionOf(spirit));
 
 const hoverFrame = createHoverFrame();
 const frontMarker = createFrontMarker();
+let guide = null;          // грядка-подсказка в начале новой игры — над ней искорки (см. CALL_EVERY)
+let basketCalls = false;   // корзинка полна — искорки над большой корзиной
 scene.add(hoverFrame, frontMarker);
 
 // Действия интерфейса — со звуком
@@ -317,7 +319,7 @@ function refresh() {
   basket.userData.fill.visible = game.hasHarvest();
   hero.setLanternReach(game.perks().lanternRadius);
   const view = game.view();
-  gardenView.setBasketCall(view.carried.length >= view.capacity); // корзинка полна — большая корзина зовёт
+  basketCalls = view.carried.length >= view.capacity; // корзинка полна — большая корзина зовёт
   ui.render({ ...view, closeUp: cameraControl.isCloseUp });
   save();
 }
@@ -501,6 +503,10 @@ function watchForJack(dt) {
 
 const GLINT_EVERY = 1.2; // раз во сколько секунд поблёскивает одно из спелых растений
 let glintTimer = GLINT_EVERY;
+// Подсказки светом — такими же искорками, как у спелых, только чаще: грядка, куда пойти (новая игра),
+// и большая корзина, когда корзинка для сбора полна
+const CALL_EVERY = 0.45;
+let callTimer = CALL_EVERY;
 
 // ---------- Игровой цикл ----------
 // Где растут спелые светящиеся грибы — над ними поднимаются споры
@@ -640,7 +646,7 @@ function frame(now) {
   gardenView.setShine(lamps); // мокрые грядки блестят при фонарях (каждый кадр: текстура могла догрузиться позже)
   decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
   if (frameCount % 30 === 0) updatePollen();
-  if (frameCount % 20 === 0) gardenView.setGuide(guideCell());
+  if (frameCount % 20 === 0) guide = guideCell();
   gardenView.pulse(now / 1000, menu.isOpen ? 0 : dt);
   glintTimer -= dt;
   if (glintTimer <= 0 && !menu.isOpen) { // днём спелые изредка поблёскивают
@@ -648,6 +654,12 @@ function frame(now) {
     const ripe = lamps < 0.5 ? game.ripeCells() : [];
     const c = ripe[Math.floor(Math.random() * ripe.length)];
     if (c) effects.glint(cellToWorld(c.x, c.z));
+  }
+  callTimer -= dt;
+  if (callTimer <= 0 && !menu.isOpen) {
+    callTimer = CALL_EVERY;
+    if (guide) effects.glint(cellToWorld(guide.x, guide.z), { spread: 0.3, count: 2, low: 0.05 });
+    if (basketCalls) effects.glint(cellToWorld(BASKET_CELL.x, BASKET_CELL.z), { spread: 0.5, low: 0.15 });
   }
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), pollenPairs, visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);

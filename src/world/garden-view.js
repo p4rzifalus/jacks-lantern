@@ -19,7 +19,7 @@ const LEAN = 0.35;
 const WET_SHINE = { day: 0.9, night: 0.5 };
 const WET_SKY_REFLECTION = 0.25; // сколько неба отражается в мокрой земле (1 — как в остальном мире)
 
-// Мягкое тёплое пятно света на земле: им подсвечиваем, куда идти (первая грядка, большая корзина)
+// Мягкое пятно света на земле: им отмечаем следы духов
 function glowTexture() {
   const size = 64;
   const canvas = document.createElement('canvas');
@@ -35,7 +35,7 @@ function glowTexture() {
 }
 
 const glowMap = glowTexture();
-function glowSpot(size, color = GUIDE_COLOR) {
+function glowSpot(size, color) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ map: glowMap, color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -43,7 +43,6 @@ function glowSpot(size, color = GUIDE_COLOR) {
   mesh.visible = false;
   return mesh;
 }
-const GUIDE_COLOR = '#ffc46a';
 // След духа: где ночью что-то унесли — бледное голубое свечение на земле, тает за TRAIL_SECONDS (примерно к полудню)
 const TRAIL_COLOR = '#8fb8ff';
 const TRAIL_SECONDS = 150;
@@ -113,13 +112,6 @@ export class GardenView {
     }));
     this.soilDirty = true;
 
-    // Подсказки светом: грядка, куда стоит пойти (в начале новой игры), и большая корзина, когда корзинка полна
-    this.guide = glowSpot(CELL_SIZE * 1.3);
-    this.guide.position.y = 0.05;
-    this.basketCall = glowSpot(CELL_SIZE * 2.4);
-    const b = cellToWorld(BASKET_CELL.x, BASKET_CELL.z);
-    this.basketCall.position.set(b.x, 0.05, b.z);
-    scene.add(this.guide, this.basketCall);
     this.scene = scene;
     this.trails = new Map(); // «x,z» → { mesh, t, cell }
   }
@@ -141,21 +133,7 @@ export class GardenView {
     tr.t = TRAIL_SECONDS;
   }
 
-  // Подсветить грядку c (null — убрать): мягко пульсирует, пока на ней ничего не сделали
-  setGuide(c) {
-    this.guide.visible = !!c;
-    if (c) {
-      const p = cellToWorld(c.x, c.z);
-      this.guide.position.set(p.x, 0.05, p.z);
-    }
-  }
-
-  // Большая корзина зовёт (корзинка для сбора полна): тёплый свет вокруг неё
-  setBasketCall(on) {
-    this.basketCall.visible = on;
-  }
-
-  // Пульс подсветок и таяние следов духов (каждый кадр)
+  // Таяние следов духов (каждый кадр)
   pulse(time, dt = 0) {
     for (const [key, tr] of this.trails) {
       tr.t -= dt;
@@ -169,9 +147,6 @@ export class GardenView {
       tr.mesh.visible = !covered;
       tr.mesh.material.opacity = 0.5 * Math.min(1, tr.t / 30) * (0.8 + 0.2 * Math.sin(time * 1.5 + tr.cell.x));
     }
-    const k = 0.5 + 0.5 * Math.sin(time * 3);
-    this.guide.material.opacity = 0.25 + 0.35 * k;
-    this.basketCall.material.opacity = 0.2 + 0.3 * k;
   }
 
   // Блеск мокрой земли по времени суток: lamps — насколько горят фонари (0 — день, 1 — вечер и ночь)
