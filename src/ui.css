@@ -26,6 +26,11 @@
   --card-edge-small: 16px;     /* у маленьких кнопок */
   --lift: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.38));
   --paper-light: 1;
+  /* вырезы экрана (чёлка, скругления, полоска «домой»): всё, что у края, отступает на столько */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
   --spring: cubic-bezier(0.3, 1.6, 0.5, 1);   /* движение с лёгким перелётом — кнопка пружинит */
   --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1); /* быстро в начале, мягко в конце */            /* ночью бумага чуть темнее, чтобы не слепила (см. body[data-phase]) */
 }
@@ -127,7 +132,7 @@ body { font-family: var(--font); color: var(--ink); }
 .shop-tabs button.selected[data-tab='embers'] { background: var(--lilac); border-color: var(--lilac-dark); color: #2a2150; }
 
 /* ---------- Панель инструментов и ряд семян ---------- */
-.toolbar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 10px; }
+.toolbar { position: fixed; left: 50%; bottom: calc(14px + var(--safe-b)); transform: translateX(-50%); display: flex; gap: 10px; }
 .toolbar button { width: 72px; height: 72px; }
 .toolbar .pixel-icon { width: 48px; height: 48px; }
 .toolbar .key { top: -6px; left: -4px; }
@@ -139,27 +144,30 @@ body { font-family: var(--font); color: var(--ink); }
 
 .seed-row {
   /* на всю ширину (с полями), кнопки — по центру; иначе ряд сжимается до половины экрана и встаёт столбиком */
-  position: fixed; left: 12px; right: 12px; bottom: 100px; display: none; gap: 6px;
-  flex-wrap: wrap; justify-content: center; pointer-events: none;
+  position: fixed; left: calc(12px + var(--safe-l)); right: calc(12px + var(--safe-r)); bottom: calc(100px + var(--safe-b));
+  display: none; gap: 8px; flex-wrap: wrap; justify-content: center; pointer-events: none;
 }
-.seed-row button { pointer-events: auto; }
 .seed-row.visible { display: flex; }
-.seed-row button { min-height: 52px; padding: 0 4px 0 0; font-size: 16px; white-space: nowrap; }
-.seed-row .plant-pic { width: 64px; height: 80px; margin: -26px -8px -10px -10px; } /* у рисунка пустой верх и бока — поджимаем */
-.seed-row button b { margin-left: 6px; font-weight: 700; color: var(--ink-dim); }
+/* кнопка семян — квадрат с растением, сколько семян — на ярлычке в углу */
+.seed-row button { width: 64px; height: 64px; pointer-events: auto; }
+.seed-row .plant-pic { position: absolute; left: 50%; bottom: -13px; width: 64px; height: 80px; margin: 0 0 0 -32px; } /* у рисунка пустой верх — он уходит за край */
+.seed-row button b {
+  position: absolute; top: calc(-6px - var(--card-edge)); right: calc(-6px - var(--card-edge)); min-width: 20px; padding: 0 5px; border-radius: 9px; text-align: center;
+  font-size: 13px; font-weight: 700; line-height: 18px; color: var(--ink); background: #e7cf9c; border: 1.5px solid #5b4128;
+}
 
 /* ---------- Угол: меню, гербарий, камера ---------- */
-.corner-bar { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; }
+.corner-bar { position: fixed; top: calc(12px + var(--safe-t)); left: calc(12px + var(--safe-l)); display: flex; gap: 8px; }
 .corner-bar button { width: 52px; height: 52px; }
 .corner-bar .pixel-icon { width: 32px; height: 32px; }
 .corner-bar .key { top: -9px; left: -6px; font-size: 10px; }
-.view-bar { top: 74px; }
+.view-bar { top: calc(74px + var(--safe-t)); }
 .view-bar button { color: var(--ink-dim); }
 
 /* ---------- Монеты, огоньки, время суток ---------- */
 .hud {
   --card-edge: var(--card-edge-small);
-  position: fixed; top: 12px; right: 12px; display: flex; gap: 14px; padding: 0 6px; font-size: 22px; line-height: 1.2;
+  position: fixed; top: calc(12px + var(--safe-t)); right: calc(12px + var(--safe-r)); display: flex; gap: 14px; padding: 0 6px; font-size: 22px; line-height: 1.2;
 }
 .hud span { display: inline-flex; align-items: center; gap: 5px; }
 .hud b { font-weight: inherit; font-variant-numeric: tabular-nums; } /* цифры одной ширины — число не дёргается, пока крутится */
@@ -167,7 +175,7 @@ body { font-family: var(--font); color: var(--ink); }
 .hud .pixel-icon { width: 16px; height: 16px; }
 .daytime {
   --card-edge: var(--card-edge-small);
-  position: fixed; top: 80px; right: 12px; padding: 0; display: flex;
+  position: fixed; top: calc(80px + var(--safe-t)); right: calc(12px + var(--safe-r)); padding: 0; display: flex;
 }
 /* циферблат суток (icons.js → drawDayDial): 16×16, на экране 32 */
 .daytime-dial { display: block; width: 32px; height: 32px; image-rendering: pixelated; }
@@ -176,7 +184,8 @@ body.intro .daytime { display: none; }
 /* ---------- Окна: магазин и гербарий ---------- */
 .shop-backdrop {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-  padding: 64px 16px 16px; background: rgba(12, 10, 20, 0.5);
+  padding: calc(64px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+  background: rgba(12, 10, 20, 0.5);
 }
 .shop-backdrop.visible { display: flex; }
 .shop {
@@ -250,10 +259,28 @@ body.intro .daytime { display: none; }
 /* ---------- Меню и стартовый экран ---------- */
 .menu-backdrop {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-  padding: 40px 16px 16px; background: rgba(12, 10, 20, 0.5); z-index: 10;
+  padding: calc(40px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+  background: rgba(12, 10, 20, 0.5); z-index: 10;
 }
 .menu-backdrop.visible { display: flex; }
 body.intro .menu-backdrop { background: radial-gradient(ellipse at center, rgba(12, 10, 20, 0.2), rgba(12, 10, 20, 0.65)); }
+/* Стартовый экран — обложка игры: картинка на весь экран, сверху логотип, ниже карточка с кнопками.
+   Лёжа — логотип слева, карточка справа. Без картинок (art/cover-tall, art/logo) — просто окно поверх острова */
+.start-logo { display: none; }
+body.intro .menu-backdrop:has(.menu[data-screen='start']) {
+  flex-direction: column; justify-content: space-between; gap: 12px; /* логотип вверху, кнопки внизу, между ними — остров */
+  background: linear-gradient(rgba(20, 14, 10, 0.1), rgba(20, 14, 10, 0.35)), var(--ui-cover, none) center 40% / cover no-repeat, #2a1f1a;
+}
+body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo {
+  display: block; width: min(86vw, 440px); aspect-ratio: 640 / 317; flex: none;
+  background: var(--ui-logo) center / contain no-repeat; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.menu[data-screen='start'] .menu-title { display: none; } /* название — на логотипе */
+@media (orientation: landscape) {
+  body.intro .menu-backdrop:has(.menu[data-screen='start']) { flex-direction: row; justify-content: space-evenly; }
+  body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo { width: min(44vw, 440px); }
+  body.intro .menu-backdrop:has(.menu[data-screen='start']) .menu { max-width: 360px; }
+}
 body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .popups, body.intro .jack { display: none; }
 .menu {
   --card-edge: 28px;
@@ -418,6 +445,56 @@ body.story .daytime, body.story .jack:not(.story) { display: none; }
 .shop-buy button, .menu-buttons button, .menu-sound .toggle, .shop-tabs button, .shop-close, .menu-close { transition: transform 0.18s var(--spring), height 0.15s var(--ease-out); }
 .shop-buy button:active:not(:disabled), .menu-buttons button:active:not(:disabled), .menu-sound .toggle:active,
 .shop-close:active, .menu-close:active { transform: translateY(1px) scale(0.96); transition-duration: 0.06s; }
+
+/* ---------- Подсказка (tooltip.js): маленькая бумажная плашка над элементом ---------- */
+.tip {
+  position: fixed; left: 0; top: 0; z-index: 80; max-width: 240px; padding: 4px 10px 5px; pointer-events: none;
+  font-size: 15px; line-height: 1.3; color: var(--ink); background: var(--ui-paper) center / 256px;
+  border: 2px solid #4e2f17; border-radius: 8px; filter: var(--lift);
+  opacity: 0; transform: translateY(4px); transition: opacity 0.12s, transform 0.12s var(--ease-out);
+}
+.tip.visible { opacity: 1; transform: none; }
+/* долгое нажатие на телефоне не выделяет текст и не открывает системное меню */
+.toolbar, .seed-row, .corner-bar, .hud, .daytime, .shop, .menu, .jack { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* ---------- Телефон лёжа (низкий широкий экран): панель — справа столбиком, низ свободен для огорода ---------- */
+@keyframes slide-in-x { from { opacity: 0; transform: translateX(24px); } }
+@keyframes slide-out-x { to { opacity: 0; transform: translateX(24px); } }
+@media (orientation: landscape) and (max-height: 500px) {
+  .toolbar {
+    left: auto; bottom: auto; top: 50%; right: calc(12px + var(--safe-r)); transform: translateY(-50%);
+    flex-direction: column; gap: 8px;
+  }
+  .toolbar button { width: 64px; height: 64px; }
+  /* ряд семян — столбиком слева от панели; не помещается — следующий столбик ещё левее */
+  .seed-row {
+    left: auto; bottom: calc(12px + var(--safe-b)); top: calc(12px + var(--safe-t)); right: calc(12px + var(--safe-r) + 64px + 12px);
+    flex-direction: column; flex-wrap: wrap-reverse; justify-content: center; align-content: flex-start;
+  }
+  .seed-row.visible { animation-name: slide-in-x; }
+  .seed-row.closing { animation-name: slide-out-x; }
+  /* монеты и циферблат — в левый нижний угол (справа сверху теперь панель) */
+  .hud { top: auto; right: auto; bottom: calc(12px + var(--safe-b)); left: calc(12px + var(--safe-l)); }
+  .daytime { top: auto; right: auto; bottom: calc(12px + var(--safe-b) + 66px); left: calc(12px + var(--safe-l)); }
+  /* реплика Джека — внизу посередине, между монетами и рядом семян (jack.js не поднимает её над панелью) */
+  .jack:not(.story) { bottom: calc(12px + var(--safe-b)); max-width: min(520px, calc(100vw - 2 * (var(--safe-r) + 168px))); }
+  /* окна ниже и шире: лист прокручивается, заголовок и вкладки на месте */
+  .shop-backdrop { padding-top: calc(52px + var(--safe-t)); padding-bottom: calc(8px + var(--safe-b)); }
+  .shop { --card-edge: 22px; max-width: 640px; }
+  .shop-head { font-size: 22px; padding-top: 0; }
+  .menu-backdrop { padding-top: calc(16px + var(--safe-t)); padding-bottom: calc(8px + var(--safe-b)); }
+  .menu { --card-edge: 22px; max-width: 600px; }
+  .menu-buttons button, .menu-sound .toggle { min-height: 42px; padding-top: 4px; padding-bottom: 4px; }
+  /* меню — в две колонки: слева звук и «Продолжить», справа файлы и новая игра */
+  .menu[data-screen='menu'] { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; align-items: start; }
+  .menu[data-screen='menu'] > * { grid-column: 1 / -1; }
+  .menu[data-screen='menu'] > .menu-section { grid-column: 1; grid-row: 2; padding: 6px 0; }
+  .menu[data-screen='menu'] > .menu-section.menu-buttons { grid-column: 2; grid-row: 2 / span 2; }
+  .menu[data-screen='menu'] > .menu-buttons:last-child { grid-column: 1; grid-row: 3; align-self: end; padding-bottom: 6px; }
+  .menu[data-screen='menu'] .menu-section::before { display: none; }
+  .menu[data-screen='menu'] .menu-sound .toggle { width: 128px; }
+  .menu-head { margin-bottom: 0; font-size: 24px; }
+}
 
 /* «уменьшить движение» в настройках телефона или компьютера — без анимаций, всё просто появляется */
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,7 @@
 import './ui.css';
 
 const webArt = import.meta.glob('../art/web/ui/*.webp', { eager: true, query: '?url', import: 'default' });
-const userArt = import.meta.glob('../art/ui-*.{png,jpg,jpeg,webp}', { eager: true, query: '?url', import: 'default' });
+const userArt = import.meta.glob('../art/{ui-*,cover-tall,logo}.{png,jpg,jpeg,webp}', { eager: true, query: '?url', import: 'default' });
 function artFile(name) {
   const web = webArt[`../art/web/ui/${name}.webp`];
   if (web) return web;
@@ -151,6 +151,8 @@ export function initUIArt() {
     '--ui-flourish': artFile('ui-flourish') || svgUrl(flourish()),
     '--ui-divider': artFile('ui-divider') || svgUrl(divider()),
   };
+  // обложка и логотип стартового экрана: без них стартовый экран — просто окно поверх острова
+  for (const [k, name] of [['--ui-cover', 'cover-tall'], ['--ui-logo', 'logo']]) if (artFile(name)) vars[k] = artFile(name);
   const root = document.documentElement.style;
   for (const [k, v] of Object.entries(vars)) root.setProperty(k, `url("${v}")`);
   // где «резать» карточку: углы и край с контуром не растягиваются (в точках картинки)

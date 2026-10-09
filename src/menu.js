@@ -25,7 +25,11 @@ function el(tag, className, html = '') {
 export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLoad, onOpenChange }) {
   const backdrop = el('div', 'menu-backdrop');
   const card = el('div', 'menu');
-  backdrop.appendChild(card);
+  // логотип игры — на стартовом экране, над обложкой (art/logo.png; виден только там — ui.css)
+  const logo = el('div', 'start-logo');
+  logo.setAttribute('role', 'img');
+  logo.setAttribute('aria-label', 'Jack’s Lantern');
+  backdrop.append(logo, card);
   document.body.appendChild(backdrop);
 
   let ready = false; // загрузился ли мир (до этого кнопки стартового экрана неактивны)
@@ -57,6 +61,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   function ask(text, buttons) {
     const back = screen;
     return new Promise((resolve) => {
+      card.dataset.screen = 'ask';
       card.innerHTML = `<div class="menu-text">${text}</div><div class="menu-buttons"></div>`;
       const row = card.querySelector('.menu-buttons');
       for (const b of buttons) {
@@ -141,6 +146,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   }
 
   function render(name, data) {
+    card.dataset.screen = name; // раскладка окна зависит от экрана (ui.css: на низком экране меню — в две колонки)
     if (name === 'discovery') {
       // выведен новый гибрид: большая картинка, имя и от кого — без слов; закрывается тапом в любом месте
       card.innerHTML = `

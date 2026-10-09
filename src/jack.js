@@ -37,10 +37,15 @@ export function createJack({ onType }) {
     box.classList.toggle('visible', !!line);
   }
 
-  // Встать над рядом семян, если он открыт (иначе — над панелью инструментов)
+  // Встать над рядом семян, если он открыт (иначе — над панелью инструментов).
+  // Телефон лёжа: панель справа столбиком — реплика просто внизу (ui.css)
   function place() {
     const seeds = document.querySelector('.seed-row.visible');
     const toolbar = document.querySelector('.toolbar');
+    if (toolbar && getComputedStyle(toolbar).flexDirection === 'column') {
+      box.style.bottom = '';
+      return;
+    }
     const top = seeds ? seeds.getBoundingClientRect().top : toolbar ? toolbar.getBoundingClientRect().top : window.innerHeight;
     box.style.bottom = `${Math.round(window.innerHeight - top + 10)}px`;
   }

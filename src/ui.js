@@ -2,6 +2,7 @@
 import { plural, formatTime } from './text.js';
 import { pixelIcon, drawDayDial } from './icons.js';
 import { showLayer, rollingNumber } from './ui-motion.js';
+import { createTooltips } from './tooltip.js';
 
 // Инструменты (клавиши 1–3). Магазин — клавиша 4, это не инструмент, а окно.
 export const TOOLS = [
@@ -29,6 +30,7 @@ function toolButton(key, icon, name) {
 const embersOf = (n) => plural(n, ['огонёк', 'огонька', 'огоньков']);
 
 export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopToggle, onHerbariumToggle, onTab, plantImage, onCloseUp, onRotate, onMenu }) {
+  createTooltips(); // подсказки: наведение мыши или долгое нажатие пальцем
   // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка
   const menuBar = el('div', 'corner-bar');
   const menuButton = el('button', '', `${pixelIcon('menu')}<span class="key">Esc</span>`);
