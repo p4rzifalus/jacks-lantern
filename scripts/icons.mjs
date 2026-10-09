@@ -1,4 +1,4 @@
-// Значки игры — фонарь Джек: npm run icons
+// Значки игры — фонарь Джек — и превью ссылки: npm run icons
 // Берёт тот же пиксельный портрет, что у реплик Джека (src/art/jack-art.js), и кладёт в public/:
 //   favicon-16.png — вкладка браузера, отдельный крошечный рисунок (портрет в 16 точек не влезает);
 //   favicon-32.png, favicon.png (64) — вкладка на обычном и чётком экране, портрет как есть;
@@ -6,6 +6,7 @@
 //   icon-192.png, icon-512.png — Android и установка игры как приложения (site.webmanifest).
 // Большие значки: тёмный фон как у игры, за фонарём — тёплое свечение. Фонарь занимает ~2/3 высоты,
 // чтобы Android мог обрезать значок кругом или «каплей» и ничего не срезал.
+// Превью ссылки в соцсетях и мессенджерах — og-image.jpg 1200×630: широкая обложка (art/cover.png), слева логотип (art/logo.png).
 import path from 'node:path';
 import sharp from 'sharp';
 import { PixelSheet } from '../src/art/pixels.js';
@@ -95,4 +96,21 @@ await tabIcon(64, 2, 'favicon.png');
 await bigIcon(180, 5, 'apple-touch-icon.png');
 await bigIcon(192, 4, 'icon-192.png');
 await bigIcon(512, 11, 'icon-512.png');
-console.log('Значки готовы: public/favicon-16.png, favicon-32.png, favicon.png, apple-touch-icon.png, icon-192.png, icon-512.png');
+// Превью ссылки: обложка, обрезанная до 1200×630 по центру, логотип слева с мягкой тенью (как на стартовом экране)
+async function ogImage() {
+  const W = 1200, H = 630;
+  const cover = await sharp(path.resolve('art/cover.png')).resize(W, H, { fit: 'cover', position: 'centre' }).toBuffer();
+  const logoW = 380;
+  const logo = await sharp(path.resolve('art/logo.png')).resize(logoW).toBuffer();
+  const { height: logoH } = await sharp(logo).metadata();
+  const left = 28;
+  const top = Math.round((H - logoH) / 2);
+  // тень — тот же логотип, чёрный и размытый, чуть ниже
+  const shadow = await sharp(logo).ensureAlpha().linear([0, 0, 0, 0.5], [0, 0, 0, 0]).blur(10).toBuffer();
+  await sharp(cover)
+    .composite([{ input: shadow, left, top: top + 8 }, { input: logo, left, top }])
+    .jpeg({ quality: 86, mozjpeg: true })
+    .toFile(path.join(OUT, 'og-image.jpg'));
+}
+await ogImage();
+console.log('Значки готовы: public/favicon-16.png, favicon-32.png, favicon.png, apple-touch-icon.png, icon-192.png, icon-512.png; превью ссылки: public/og-image.jpg');

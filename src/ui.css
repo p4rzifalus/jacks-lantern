@@ -265,7 +265,7 @@ body.intro .daytime { display: none; }
 .menu-backdrop.visible { display: flex; }
 body.intro .menu-backdrop { background: radial-gradient(ellipse at center, rgba(12, 10, 20, 0.2), rgba(12, 10, 20, 0.65)); }
 /* Стартовый экран — обложка игры: картинка на весь экран, сверху логотип, ниже карточка с кнопками.
-   Лёжа — логотип слева, карточка справа. Без картинок (art/cover-tall, art/logo) — просто окно поверх острова */
+   Лёжа — логотип слева, карточка справа, обложка широкая (art/cover). Без картинок (art/cover-tall, art/logo) — просто окно поверх острова */
 .start-logo { display: none; }
 body.intro .menu-backdrop:has(.menu[data-screen='start']) {
   flex-direction: column; justify-content: space-between; gap: 12px; /* логотип вверху, кнопки внизу, между ними — остров */
@@ -277,8 +277,13 @@ body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo {
 }
 .menu[data-screen='start'] .menu-title { display: none; } /* название — на логотипе */
 @media (orientation: landscape) {
-  body.intro .menu-backdrop:has(.menu[data-screen='start']) { flex-direction: row; justify-content: space-evenly; }
-  body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo { width: min(44vw, 440px); }
+  body.intro .menu-backdrop:has(.menu[data-screen='start']) {
+    flex-direction: row; justify-content: space-between; /* логотип и карточка — по краям, остров посередине открыт */
+    padding-left: calc(4vw + var(--safe-l)); padding-right: calc(4vw + var(--safe-r));
+    /* лёжа — широкая обложка (art/cover), без неё — та же вертикальная */
+    background: linear-gradient(rgba(20, 14, 10, 0.1), rgba(20, 14, 10, 0.35)), var(--ui-cover-wide, var(--ui-cover, none)) center / cover no-repeat, #2a1f1a;
+  }
+  body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo { width: min(32vw, 440px); }
   body.intro .menu-backdrop:has(.menu[data-screen='start']) .menu { max-width: 360px; }
 }
 body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .popups, body.intro .jack { display: none; }

@@ -5,7 +5,7 @@
 //   считал при каждом запуске: <имя>_n (рельеф), <имя>_r (шероховатость), <имя>_ao (затенение во впадинах).
 // Небо (sky-*) — одного размера для всех: оно на весь экран, уменьшать его заметно.
 // Картинки интерфейса (ui-*) — в art/web/ui/, одного размера для всех: пустые прозрачные поля обрезаются,
-//   длинная сторона — UI_SIZES (они на экране небольшие). Сюда же — обложка стартового экрана (cover-tall) и логотип (logo).
+//   длинная сторона — UI_SIZES (они на экране небольшие). Сюда же — обложки стартового экрана (cover — широкая, cover-tall — для телефона стоя) и логотип (logo).
 // Пиксельные спрайты (PNG) не трогаем — им нужна каждая точка.
 import { readdir, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +16,7 @@ const ART = path.resolve('art');
 const WEB = path.join(ART, 'web');
 const SIZES = [1024, 512];   // размеры текстур: для компьютера и для телефона
 const SKY_SIZE = 1024;       // небо — одно на всех
-const UI_SIZES = { 'ui-paper': 512, 'ui-card': 512, 'ui-vine': 384, 'ui-flourish': 384, 'ui-divider': 768, 'cover-tall': 1536, logo: 640 };
+const UI_SIZES = { 'ui-paper': 512, 'ui-card': 512, 'ui-vine': 384, 'ui-flourish': 384, 'ui-divider': 768, 'cover-tall': 1536, cover: 1536, logo: 640 };
 const QUALITY = 72;          // качество WebP для картинок (0–100): ниже — легче файл, но мельче детали
 const MAP_QUALITY = 80;      // для карт рельефа: сжатие на них видно меньше, чем кажется
 
@@ -85,7 +85,7 @@ for (const file of await readdir(ART)) {
   const side = UI_SIZES[name];
   // бумага — бесшовная, её не обрезаем; у остальных — убрать прозрачные поля вокруг рисунка
   const trimmed = name === 'ui-paper' ? await sharp(path.join(ART, file)).toBuffer() : await trimAlpha(path.join(ART, file));
-  await sharp(trimmed).resize(side, side, { fit: 'inside' }).webp({ quality: 85, alphaQuality: 90 }).toFile(path.join(WEB, 'ui', `${name}.webp`));
+  await sharp(trimmed).resize(side, side, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85, alphaQuality: 90 }).toFile(path.join(WEB, 'ui', `${name}.webp`));
   count++;
   console.log(`готово: ${name}`);
 }
