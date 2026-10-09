@@ -265,12 +265,12 @@ function selectTool(id) {
   game.selectTool(id);
 }
 function toggleShop(open = !game.state.shopOpen) {
-  if (open !== game.state.shopOpen) sound.shop(open);
+  if (open !== game.state.shopOpen) sound.paper(open);
   if (open) game.toggleHerbarium(false);
   game.toggleShop(open);
 }
 function toggleHerbarium(open = !game.state.herbariumOpen) {
-  if (open !== game.state.herbariumOpen) sound.shop(open);
+  if (open !== game.state.herbariumOpen) sound.paper(open);
   if (open) game.toggleShop(false);
   game.toggleHerbarium(open);
 }
@@ -294,6 +294,7 @@ const popups = createPopups(camera, renderer.domElement);
 
 const ui = createUI({
   onSelectTool: selectTool,
+  onTab: () => sound.page(),
   onSelectSeed(type) {
     sound.click();
     game.selectSeed(type);
@@ -405,6 +406,7 @@ menu = createMenu({
     reloadIntoGame();
   },
   onOpenChange(open) {
+    sound.paper(open); // шорох бумаги, как у остальных окон
     input.enabled = !open; // пока открыто меню, герой стоит
     if (open) hero.walkPath([], null); // и не доходит до клетки, по которой щёлкнули перед этим
     if (!open) save();

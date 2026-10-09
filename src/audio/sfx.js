@@ -201,12 +201,25 @@ export function createSfx(engine) {
       tone(engine, FX, { freq: rand(1100, 1250), freqEnd: 700, glide: 0.03, type: 'triangle', gain: 0.07, decay: 0.04 });
     },
 
-    // Магазин открылся (вверх) / закрылся (вниз)
-    shop(open) {
+    // Окно открылось / закрылось: шорох бумаги — лист разворачивают и кладут на стол (закрыли — смахивают)
+    paper(open) {
       if (!ready()) return;
       const t = now();
-      const notes = open ? [67, 74] : [74, 67];
-      notes.forEach((n, i) => tone(engine, FX, { when: t + i * 0.08, freq: noteHz(n), type: 'triangle', gain: 0.09, decay: 0.25, filter: 2500, reverb: 0.2 }));
+      const crinkles = open ? 3 : 2;
+      for (let i = 0; i < crinkles; i++) { // мелкий хруст листа
+        noise(engine, FX, { when: t + i * rand(0.035, 0.06), type: 'bandpass', freq: rand(2500, 4500), q: 1.2, gain: rand(0.04, 0.06), attack: 0.004, decay: rand(0.03, 0.06) });
+      }
+      // взмах листа: шорох, который светлеет (открыли) или темнеет (закрыли)
+      noise(engine, FX, { when: t, type: 'bandpass', freq: open ? 1200 : 3200, freqEnd: open ? 3200 : 1000, q: 0.8, gain: 0.06, attack: 0.03, decay: 0.16 });
+      if (open) noise(engine, FX, { when: t + 0.15, color: 'brown', type: 'lowpass', freq: 500, gain: 0.1, attack: 0.003, decay: 0.07 }); // лист лёг
+    },
+
+    // Вкладка: перелистнули страницу — шорох-взмах и лёгкий хлопок страницы
+    page() {
+      if (!ready()) return;
+      const t = now();
+      noise(engine, FX, { when: t, type: 'bandpass', freq: 1600, freqEnd: 4200, q: 0.9, gain: 0.05, attack: 0.05, decay: 0.12 });
+      noise(engine, FX, { when: t + 0.13, type: 'bandpass', freq: 2200, q: 1.5, gain: 0.04, attack: 0.002, decay: 0.03 });
     },
 
     // Покупка: монетки отданы

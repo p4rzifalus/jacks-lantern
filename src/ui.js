@@ -1,6 +1,7 @@
 // Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, гербарий.
 import { plural, formatTime } from './text.js';
 import { pixelIcon, drawDayDial } from './icons.js';
+import { showLayer, rollingNumber } from './ui-motion.js';
 
 // Инструменты (клавиши 1–3). Магазин — клавиша 4, это не инструмент, а окно.
 export const TOOLS = [
@@ -27,7 +28,7 @@ function toolButton(key, icon, name) {
 // «1 огонёк», «5 огоньков»
 const embersOf = (n) => plural(n, ['огонёк', 'огонька', 'огоньков']);
 
-export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopToggle, onHerbariumToggle, plantImage, onCloseUp, onRotate, onMenu }) {
+export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopToggle, onHerbariumToggle, onTab, plantImage, onCloseUp, onRotate, onMenu }) {
   // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка
   const menuBar = el('div', 'corner-bar');
   const menuButton = el('button', '', `${pixelIcon('menu')}<span class="key">Esc</span>`);
@@ -85,7 +86,16 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   });
   document.body.appendChild(seedRow);
 
-  const coinsBox = el('div', 'hud title');
+  // Монеты и огоньки: число прокручивается до нового, значок подпрыгивает (вверх — пришло, вниз — потрачено)
+  const coinsBox = el('div', 'hud title', `<span class="coins" title="монеты">${pixelIcon('coin')}<b></b></span><span class="embers" title="огоньки">${pixelIcon('ember')}<b></b></span>`);
+  const embersBox = coinsBox.querySelector('.embers');
+  const bump = (box) => (dir) => {
+    box.classList.remove('up', 'down');
+    void box.offsetWidth; // перезапустить анимацию
+    box.classList.add(dir);
+  };
+  const setCoins = rollingNumber(coinsBox.querySelector('.coins b'), bump(coinsBox.querySelector('.coins')));
+  const setEmbers = rollingNumber(embersBox.querySelector('b'), bump(embersBox));
   document.body.appendChild(coinsBox);
 
   // Время суток под монетами: значок, название и полоска — сколько осталось до следующей части
@@ -110,6 +120,10 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
     const tab = e.target.closest('button[data-tab]');
     if (tab && tab.dataset.tab !== shopTab) {
       shopTab = tab.dataset.tab;
+      onTab?.(); // перелистнули страницу — звук
+      shopList.classList.remove('turn');
+      void shopList.offsetWidth;
+      shopList.classList.add('turn'); // и лист плавно проявляется заново
       if (lastView) renderShop(lastView);
     }
     const buy = e.target.closest('button[data-buy]');
@@ -205,18 +219,20 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       basketCount.textContent = `${view.carried.length}/${view.capacity}`;
       basketCount.classList.toggle('full', view.carried.length >= view.capacity);
       closeUpButton.setAttribute('aria-pressed', String(!!view.closeUp));
-      coinsBox.innerHTML = `<span title="монеты">${pixelIcon('coin')}${view.coins}</span>${view.embers ? `<span class="embers" title="огоньки">${pixelIcon('ember')}${view.embers}</span>` : ''}`;
+      setCoins(view.coins);
+      setEmbers(view.embers);
+      embersBox.hidden = !view.embers; // огоньки — когда появился первый
 
-      seedRow.classList.toggle('visible', view.tool === 'seeds');
+      showLayer(seedRow, view.tool === 'seeds');
       seedRow.innerHTML = view.seedOptions
         .map((s) => `<button data-seed="${s.type}" class="${s.type === view.selectedSeed ? 'selected' : ''}" title="${s.name}" aria-label="${s.name}">${plantPicture(s.type)}<b>${s.count}</b></button>`)
         .join('');
 
       herbariumButton.classList.toggle('on', view.herbariumOpen);
-      herbarium.classList.toggle('visible', view.herbariumOpen);
+      showLayer(herbarium, view.herbariumOpen);
       if (view.herbariumOpen) renderHerbarium(view);
       lastView = view;
-      shop.classList.toggle('visible', view.shopOpen);
+      showLayer(shop, view.shopOpen);
       if (view.shopOpen) renderShop(view); // закрытый магазин не перерисовываем — соберётся заново при открытии
     },
 

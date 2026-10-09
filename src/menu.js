@@ -3,6 +3,7 @@
 import { canOverwrite, saveToFile, openSaveFile, lastFileInfo, hasOwnFile } from './save-file.js';
 import { escapeHtml } from './text.js';
 import { pixelIcon } from './icons.js';
+import { showLayer } from './ui-motion.js';
 
 // «28 сентября, 21:15»
 function formatDate(time) {
@@ -34,7 +35,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   const setScreen = (name) => {
     const wasOpen = !!screen;
     screen = name;
-    backdrop.classList.toggle('visible', !!name);
+    showLayer(backdrop, !!name); // окно раскрывается и сворачивается (ui.css)
     document.body.classList.toggle('intro', name === 'start');
     if (wasOpen !== !!name) onOpenChange(!!name);
   };

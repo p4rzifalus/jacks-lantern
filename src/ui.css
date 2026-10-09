@@ -25,7 +25,9 @@
   --card-edge: 26px;           /* сколько от края карточки не растягивается (контур и подрумяненный край) */
   --card-edge-small: 16px;     /* у маленьких кнопок */
   --lift: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.38));
-  --paper-light: 1;            /* ночью бумага чуть темнее, чтобы не слепила (см. body[data-phase]) */
+  --paper-light: 1;
+  --spring: cubic-bezier(0.3, 1.6, 0.5, 1);   /* движение с лёгким перелётом — кнопка пружинит */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1); /* быстро в начале, мягко в конце */            /* ночью бумага чуть темнее, чтобы не слепила (см. body[data-phase]) */
 }
 body[data-phase='night'] { --paper-light: 0.8; }
 body[data-phase='evening'], body[data-phase='morning'] { --paper-light: 0.92; }
@@ -51,9 +53,12 @@ body { font-family: var(--font); color: var(--ink); }
   --card-edge: var(--card-edge-small);
   position: relative; display: flex; align-items: center; justify-content: center; padding: 0;
   font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  transition: filter 2s, transform 0.12s;
+  transition: filter 2s, transform 0.18s var(--spring); /* отпустили — пружинит обратно */
 }
-.toolbar button:active, .seed-row button:active, .corner-bar button:active { transform: translateY(2px); }
+.toolbar button:active, .seed-row button:active, .corner-bar button:active { transform: translateY(1px) scale(0.94); transition-duration: 2s, 0.06s; }
+@media (hover: hover) { /* на компьютере под мышью кнопка чуть приподнимается */
+  .toolbar button:hover:not(:active), .seed-row button:hover:not(:active), .corner-bar button:hover:not(:active) { transform: translateY(-2px); }
+}
 /* выбранное — вся кнопка темнее и в золотой обводке; рамка ::after — только когда кнопка зовёт */
 .toolbar button::before, .seed-row button::before, .corner-bar button::before {
   /* до самого чернильного контура карточки (он в 2 точках от края), по краю — тёплая золотая обводка */
@@ -108,14 +113,16 @@ body { font-family: var(--font); color: var(--ink); }
 .divider { height: 10px; margin: 4px auto; max-width: 150px; background: var(--ui-divider) center / contain no-repeat; }
 
 /* вкладки-ярлыки над окном: семена — зелёный, улучшения — лиловый */
-.shop-tabs { position: absolute; left: 6px; top: calc(-44px - var(--card-edge)); display: flex; gap: 4px; }
+.shop-tabs { position: absolute; left: 6px; top: calc(-44px - var(--card-edge)); height: 44px; display: flex; align-items: flex-end; gap: 4px; }
 .shop-tabs button {
-  display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px; cursor: pointer; touch-action: manipulation;
+  display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px; cursor: pointer; touch-action: manipulation;
+  transition: height 0.15s var(--ease-out); /* выбранный ярлык выше остальных */
   font-family: var(--font-title); font-size: 17px; font-weight: 700; color: var(--ink);
   background: linear-gradient(var(--paper-shade), var(--paper-shade)), var(--ui-paper) center / 256px;
   border: 2.5px solid #5b4128; border-bottom: none; border-radius: 12px 12px 0 0;
 }
 .shop-tabs .pixel-icon { width: 16px; height: 16px; }
+.shop-tabs button.selected { height: 44px; }
 .shop-tabs button.selected[data-tab='coins'] { background: #9cb86a; border-color: var(--green-dark); color: #22340f; }
 .shop-tabs button.selected[data-tab='embers'] { background: var(--lilac); border-color: var(--lilac-dark); color: #2a2150; }
 
@@ -155,6 +162,8 @@ body { font-family: var(--font); color: var(--ink); }
   position: fixed; top: 12px; right: 12px; display: flex; gap: 14px; padding: 0 6px; font-size: 22px; line-height: 1.2;
 }
 .hud span { display: inline-flex; align-items: center; gap: 5px; }
+.hud b { font-weight: inherit; font-variant-numeric: tabular-nums; } /* цифры одной ширины — число не дёргается, пока крутится */
+.hud [hidden] { display: none; }
 .hud .pixel-icon { width: 16px; height: 16px; }
 .daytime {
   --card-edge: var(--card-edge-small);
@@ -308,7 +317,7 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
 /* портрет Джека слева от текста: пиксельный, крупными квадратами */
 .jack { display: flex; align-items: center; gap: 10px; }
 .jack-portrait {
-  flex: none; width: 72px; height: 72px; margin: -22px 0 -14px -10px; /* выглядывает из карточки */
+  flex: none; width: 72px; height: 90px; margin: -34px 0 -18px -10px; /* выглядывает из карточки */
   image-rendering: pixelated; image-rendering: crisp-edges;
   filter: drop-shadow(0 0 6px rgba(255, 196, 90, 0.45));
 }
@@ -377,3 +386,40 @@ body.story .daytime, body.story .jack:not(.story) { display: none; }
 .stats-rows b { font-weight: normal; color: var(--amber); }
 .stats-buttons { display: flex; gap: 10px; }
 .stats-buttons button { font: inherit; font-size: 15px; padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(255, 214, 160, 0.18); background: rgba(255, 255, 255, 0.08); color: #f3e2c4; cursor: pointer; }
+
+/* ---------- Движение (этап 14г): коротко, 0,1–0,25 с; помощник — ui-motion.js ---------- */
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+/* окно кладут как лист на стол: чуть снизу и меньше → на место; убирают быстрее, обратным движением */
+@keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes sheet-out { to { opacity: 0; transform: translateY(6px) scale(0.97); } }
+.shop-backdrop.visible, .menu-backdrop.visible { animation: fade-in 0.2s ease-out both; }
+.shop-backdrop.visible .shop, .menu-backdrop.visible .menu { animation: sheet-in 0.22s var(--ease-out) both; }
+.shop-backdrop.closing, .menu-backdrop.closing { animation: fade-out 0.14s ease-in both; pointer-events: none; }
+.shop-backdrop.closing .shop, .menu-backdrop.closing .menu { animation: sheet-out 0.14s ease-in both; }
+/* лоза в углах проявляется чуть позже листа */
+.shop-backdrop.visible .shop::before, .shop-backdrop.visible .shop::after,
+.menu-backdrop.visible .menu::before, .menu-backdrop.visible .menu::after { animation: fade-in 0.35s 0.12s both; }
+/* вкладку сменили — новый лист проявляется */
+@keyframes page-in { from { opacity: 0; transform: translateX(8px); } }
+.shop-list.turn { animation: page-in 0.2s var(--ease-out); }
+/* ряд семян выезжает из-за панели инструментов и уезжает обратно */
+@keyframes rise-in { from { opacity: 0; transform: translateY(24px); } }
+@keyframes sink-out { to { opacity: 0; transform: translateY(24px); } }
+.seed-row.visible { animation: rise-in 0.2s var(--ease-out) both; }
+.seed-row.closing { animation: sink-out 0.14s ease-in both; pointer-events: none; }
+.seed-row.closing button { pointer-events: none; }
+/* монеты пришли — значок подпрыгивает; потрачены — приседает */
+@keyframes coin-up { 40% { transform: translateY(-4px) scale(1.15); } }
+@keyframes coin-down { 40% { transform: translateY(2px) scale(0.88); } }
+.hud .up .pixel-icon { animation: coin-up 0.35s var(--spring); }
+.hud .down .pixel-icon { animation: coin-down 0.3s ease-out; }
+/* кнопки в окнах тоже проминаются */
+.shop-buy button, .menu-buttons button, .menu-sound .toggle, .shop-tabs button, .shop-close, .menu-close { transition: transform 0.18s var(--spring), height 0.15s var(--ease-out); }
+.shop-buy button:active:not(:disabled), .menu-buttons button:active:not(:disabled), .menu-sound .toggle:active,
+.shop-close:active, .menu-close:active { transform: translateY(1px) scale(0.96); transition-duration: 0.06s; }
+
+/* «уменьшить движение» в настройках телефона или компьютера — без анимаций, всё просто появляется */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
