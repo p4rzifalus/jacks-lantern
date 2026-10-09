@@ -27,7 +27,7 @@ export function createStats(renderer, qualityName) {
   let shownAt = 0;
   let calls = 0;
   let tris = 0;
-  const run = BENCH_SCENE ? { t: -WARMUP_SECONDS, frames: [], calls: [], done: false } : null;
+  const run = BENCH_SCENE ? { t: -WARMUP_SECONDS, frames: [], calls: [], done: false, started: false } : null;
   // Пока вкладка скрыта, браузер кадры не рисует: этот перерыв — не рывок игры, его не считаем
   let skipFrame = false;
   document.addEventListener('visibilitychange', () => { skipFrame = true; });
@@ -69,6 +69,10 @@ export function createStats(renderer, qualityName) {
   }
 
   return {
+    // Мир загрузился — сцена построена, можно мерить
+    start() {
+      if (run) run.started = true;
+    },
     begin() {
       renderer.info.reset();
     },
@@ -82,7 +86,7 @@ export function createStats(renderer, qualityName) {
       tris = renderer.info.render.triangles;
       recent.push([now, dt * 1000]);
       while (recent.length && now - recent[0][0] > 2000) recent.shift();
-      if (run && !run.done) {
+      if (run && run.started && !run.done) {
         run.t += dt;
         if (run.t > 0) {
           run.frames.push(dt * 1000);

@@ -26,6 +26,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   backdrop.appendChild(card);
   document.body.appendChild(backdrop);
 
+  let ready = false; // загрузился ли мир (до этого кнопки стартового экрана неактивны)
   let screen = null; // 'start' | 'menu' | 'discovery' | null
   let busy = false;  // идёт работа с файлом — повторные нажатия не нужны
 
@@ -145,13 +146,14 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
         <div class="menu-title title" data-act="close">${escapeHtml(data.name)}</div>
         <div class="menu-parents" data-act="close"><img src="${data.parents[0]}" alt="">+<img src="${data.parents[1]}" alt=""></div>`;
     } else if (name === 'start') {
+      const wait = ready ? '' : 'disabled'; // пока мир грузится, кнопки ждут (полоска загрузки — сверху)
       card.innerHTML = `
         <div class="menu-title title">Осенняя ферма</div>
         <div class="menu-subtitle">огород на летающем острове</div>
         <div class="menu-buttons column">
-          ${hasSave ? `<button class="primary" data-act="continue">Продолжить<small>огород от ${formatDate(savedAt)}</small></button>` : ''}
-          <button class="${hasSave ? '' : 'primary'}" data-act="new">Новая игра</button>
-          <button data-act="load">Загрузить из файла</button>
+          ${hasSave ? `<button class="primary" data-act="continue" ${wait}>Продолжить<small>огород от ${formatDate(savedAt)}</small></button>` : ''}
+          <button class="${hasSave ? '' : 'primary'}" data-act="new" ${wait}>Новая игра</button>
+          <button data-act="load" ${wait}>Загрузить из файла</button>
         </div>
         <div class="menu-status">${escapeHtml(statusText)}</div>`;
     } else if (name === 'menu') {
@@ -212,6 +214,11 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   }
 
   return {
+    // Мир загрузился и готов: кнопки стартового экрана оживают
+    setReady() {
+      ready = true;
+      if (screen === 'start') render('start');
+    },
     get isOpen() { return !!screen; },
     get isStart() { return screen === 'start'; },
     showStart: () => render('start'),

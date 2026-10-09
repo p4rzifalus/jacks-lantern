@@ -39,6 +39,21 @@ import { getSheets } from './world/sheets.js';
 import { PLANT_ORDER, PLANT_FRAME } from './art/sprite-art.js';
 
 const quality = detectQuality();
+
+// ---------- Загрузка: полоска сверху, пока грузятся картинки и готовятся шейдеры ----------
+// Все картинки грузятся через общий «диспетчер загрузок» three.js — по нему и считаем, сколько готово
+const loadingBar = document.createElement('div');
+loadingBar.className = 'loading-bar';
+loadingBar.innerHTML = '<i></i>';
+document.body.appendChild(loadingBar);
+const showLoading = (share) => { loadingBar.firstChild.style.width = `${Math.round(share * 100)}%`; };
+let loadsStarted = false;
+const allLoaded = new Promise((resolve) => {
+  THREE.DefaultLoadingManager.onStart = () => { loadsStarted = true; };
+  THREE.DefaultLoadingManager.onProgress = (url, loaded, total) => showLoading(0.85 * (loaded / total)); // последние 15% — шейдеры
+  THREE.DefaultLoadingManager.onLoad = resolve;
+  queueMicrotask(() => { if (!loadsStarted) resolve(); }); // грузить нечего — сразу дальше
+});
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
 const { renderer, scene, camera, cameraControl, world, basket, landmarks, island } = createScene(document.body);
 // Замеры скорости: адрес ?stats — счётчик, ?stats=day|night|rain — эталонная сцена (render/bench.js)
@@ -513,7 +528,7 @@ function placeOn(object, cell) {
 // посреди игры (в первую ночь, у первого духа, при первой атаке) — и картинка дёргается.
 // Рисуем по одному крошечному (невидимому глазу) образцу всего, что появляется только ночью, пару кадров — и убираем.
 // А то, что сейчас спрятано (лунные лучи, конусы фонарей, дождь), готовим для всей сцены разом в первом кадре.
-function warmUpShaders() {
+function warmUpShaders() { // возвращает «убрать образцы» — когда шейдеры собраны (см. prepareWorld)
   const sheets = getSheets();
   const group = new THREE.Group();
   group.scale.setScalar(1e-4);
@@ -544,16 +559,36 @@ function warmUpShaders() {
   group.traverse((o) => { o.frustumCulled = false; }); // рисовать, даже если середина острова не в кадре
   scene.add(group);
   applySkyReflex(scene); // вставка неба — сразу, иначе шейдер соберётся ещё раз
-  let frames = 3;
-  return () => {
-    if (frames === 3) renderer.compile(scene, camera);
-    if (frames > 0 && --frames === 0) scene.remove(group);
-  };
+  return () => scene.remove(group);
+}
+
+// Картинки загрузились — подготовить видеокарту: собрать все шейдеры (в фоне, где браузер умеет),
+// заранее отправить все текстуры и посчитать отражения неба для всех частей суток. Потом — «можно играть»
+async function prepareWorld() {
+  await allLoaded;
+  applySkyReflex(scene);
+  dayNight.prepare();
+  try {
+    await renderer.compileAsync(scene, camera);
+  } catch {
+    renderer.compile(scene, camera); // старый браузер — соберём сразу, страница на миг замрёт
+  }
+  scene.traverse((o) => {
+    for (const material of [o.material].flat().filter(Boolean)) {
+      for (const value of Object.values(material)) if (value?.isTexture) renderer.initTexture(value);
+    }
+  });
+  removeWarmUp();
+  showLoading(1);
+  loadingBar.classList.add('done');
+  menu.setReady();
+  stats?.start();
 }
 
 // Отсвет неба и растворение в дымке — всем материалам (и новым, например растениям) раз в секунду
 applySkyReflex(scene);
-const warmUpTick = warmUpShaders();
+const removeWarmUp = warmUpShaders();
+prepareWorld();
 let frameCount = 0;
 
 let last = performance.now();
@@ -626,7 +661,6 @@ function frame(now) {
   lighting.shadowTick(frameCount);
   pipeline.render(dt);
   stats?.end(realDt);
-  warmUpTick();
   devPanel?.tick(now);
 }
 

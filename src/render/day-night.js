@@ -3,7 +3,7 @@
 // между ними всё плавно перетекает. Дождь приглушает свет поверх (сила дождя — от погоды).
 import * as THREE from 'three';
 import { DAYTIME, DAY_CYCLE, LIGHTING } from '../config.js';
-import { userArtUrl } from '../art/assets.js';
+import { skyUrl } from '../art/assets.js';
 import { skyUniforms } from './sky-reflex.js';
 import { gradientCanvas, averageColor, drawHalo, backdrop, environmentMap } from './lighting.js';
 
@@ -50,7 +50,7 @@ function prepareLook(id, renderer, onImage) {
   };
   useImage(gradientCanvas(cfg.sky, SKY_SIZE));
   // своя картинка: art/sky-<часть>.png (для вечера подходит и прежняя art/sky.png)
-  const url = userArtUrl(`sky-${id}`) || (id === 'evening' ? userArtUrl('sky') : null);
+  const url = skyUrl(`sky-${id}`) || (id === 'evening' ? skyUrl('sky') : null);
   if (url) new THREE.ImageLoader().load(url, useImage);
   look.getEnv = () => {
     if (!look.env) look.env = environmentMap(renderer, look.sky, LIGHTING.groundColor);
@@ -162,6 +162,10 @@ export function createDayNight({ renderer, scene, lighting, pipeline, weather, d
 
   return {
     state,
+    // Заранее посчитать отражения неба для всех частей суток (иначе считаются в момент смены — и картинка дёргается)
+    prepare() {
+      for (const look of Object.values(looks)) look.getEnv();
+    },
     // Свет — каждый кадр (дёшево); небо и цветокоррекция — только когда заметно поменялись
     update() {
       apply(false);

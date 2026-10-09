@@ -10,6 +10,12 @@ const userArt = import.meta.glob('../../art/*.{png,jpg,jpeg,webp}', { eager: tru
 const userFile = (name) => ['png', 'jpg', 'jpeg', 'webp'].map((ext) => userArt[`../../art/${name}.${ext}`]).find(Boolean);
 export const userArtUrl = userFile; // адрес твоей картинки из art/ (или undefined)
 
+// Лёгкие копии для игры (npm run art → art/web/1024 и art/web/512) — браузер скачивает только нужный размер
+const webArt = import.meta.glob('../../art/web/*/*.webp', { query: '?url', import: 'default', eager: true });
+const webFile = (name, size) => webArt[`../../art/web/${size}/${name}.webp`];
+// Небо — одного размера на всех (оно на весь экран); нет лёгкой копии — берём оригинал
+export const skyUrl = (name) => webFile(name, 1024) || userFile(name);
+
 function pixelTexture(pixels, size, colorSpace) {
   const tex = new THREE.DataTexture(pixels, size, size, THREE.RGBAFormat);
   tex.colorSpace = colorSpace;
@@ -88,20 +94,45 @@ function smoothSettings(tex, colorSpace) {
 // Шероховатость реалистичного материала: из config.js (черепица и мокрое — глаже, трава и кора — матовые)
 const realisticRoughness = (name) => REALISTIC[name]?.roughness ?? 1;
 
+// Текстуры реалистичной картинки: цвет, рельеф, шероховатость, затенение во впадинах.
+// Одна загрузка на картинку, сколько бы материалов (оттенков) её ни брали — раньше каждый оттенок грузил и считал своё.
+const realistic = new Map(); // имя → обещание { map, normalMap, roughnessMap, aoMap }
+function realisticTextures(name, strength) {
+  if (!realistic.has(name)) realistic.set(name, webFile(name, textureLimit) ? loadPrepared(name) : computeFromImage(name, strength));
+  return realistic.get(name);
+}
+
+// Готовые файлы из art/web: всё посчитано заранее (npm run art) — браузеру остаётся только скачать
+async function loadPrepared(name) {
+  const loader = new THREE.TextureLoader();
+  const load = (suffix, colorSpace) => loader.loadAsync(webFile(`${name}${suffix}`, textureLimit)).then((t) => smoothSettings(t, colorSpace));
+  const [map, normalMap, roughnessMap, aoMap] = await Promise.all([
+    load('', THREE.SRGBColorSpace), load('_n', THREE.NoColorSpace), load('_r', THREE.NoColorSpace), load('_ao', THREE.NoColorSpace),
+  ]);
+  return { map, normalMap, roughnessMap, aoMap };
+}
+
+// Лёгкой копии нет (новая картинка, npm run art ещё не запускали) — считаем из оригинала, как раньше
+async function computeFromImage(name, strength) {
+  const tex = await new THREE.TextureLoader().loadAsync(userFile(name));
+  tex.image = fitImage(tex.image);
+  const { normal, rough, ao, size } = mapsFromImage(tex.image, strength);
+  return {
+    map: smoothSettings(tex, THREE.SRGBColorSpace),
+    aoMap: smoothSettings(new THREE.DataTexture(ao, size, size), THREE.NoColorSpace),
+    normalMap: smoothSettings(new THREE.DataTexture(normal, size, size), THREE.NoColorSpace),
+    roughnessMap: smoothSettings(new THREE.DataTexture(rough, size, size), THREE.NoColorSpace),
+  };
+}
+
 // Подставить реалистичную картинку: цвет из файла, рельеф и шероховатость — из неё же (если нет своих _n/_r)
 function loadRealistic(material, name, strength) {
-  const loader = new THREE.TextureLoader();
-  loader.load(userFile(name), (tex) => {
-    tex.image = fitImage(tex.image);
+  realisticTextures(name, strength).then((textures) => {
     const old = { map: material.map, normalMap: material.normalMap, roughnessMap: material.roughnessMap, aoMap: material.aoMap };
-    material.map = smoothSettings(tex, THREE.SRGBColorSpace);
-    const { normal, rough, ao, size } = mapsFromImage(tex.image, strength);
-    material.aoMap = smoothSettings(new THREE.DataTexture(ao, size, size), THREE.NoColorSpace);
-    material.normalMap = smoothSettings(new THREE.DataTexture(normal, size, size), THREE.NoColorSpace);
-    material.roughnessMap = smoothSettings(new THREE.DataTexture(rough, size, size), THREE.NoColorSpace);
+    Object.assign(material, textures);
     material.roughness = realisticRoughness(name) * material.userData.roughnessParam; // мокрая земля остаётся глаже
     material.needsUpdate = true;
-    Object.values(old).forEach((t) => t.dispose());
+    Object.values(old).forEach((t) => t.dispose()); // это были заглушки из кода — у каждого материала свои
     if (userFile(`${name}_n`)) replaceFromFile(material, 'normalMap', userFile(`${name}_n`));
     if (userFile(`${name}_r`)) replaceFromFile(material, 'roughnessMap', userFile(`${name}_r`));
   });

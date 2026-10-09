@@ -243,6 +243,12 @@
       .jack-text { font-size: 14px; color: var(--text); line-height: 1.45; min-height: 1.45em; }
       .jack-rest { visibility: hidden; }
 
+      /* Полоска загрузки сверху: заполняется, пока грузятся картинки и готовятся шейдеры, потом тает */
+      .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 70; pointer-events: none; transition: opacity 0.6s 0.2s; }
+      .loading-bar i { display: block; height: 100%; width: 0; background: var(--amber); box-shadow: 0 0 10px var(--amber); transition: width 0.25s; }
+      .loading-bar.done { opacity: 0; }
+      .menu-buttons button:disabled { opacity: 0.45; cursor: default; }
+
       /* Замеры скорости (?stats): счётчик сверху посередине и итог замера сцены */
       .stats-box {
         position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 50; pointer-events: none;
