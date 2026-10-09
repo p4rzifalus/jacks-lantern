@@ -57,7 +57,7 @@ const allLoaded = new Promise((resolve) => {
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
 const { renderer, scene, camera, cameraControl, world, basket, landmarks, island } = createScene(document.body);
 // Замеры скорости: адрес ?stats — счётчик, ?stats=day|night|rain — эталонная сцена (render/bench.js)
-const stats = BENCH ? createStats(renderer, quality.name) : null;
+const stats = BENCH ? createStats(renderer, quality.name, () => pipeline.economy) : null;
 const lighting = createLighting(renderer, scene, quality, landmarks.island); // тени — только над ровной серединой острова
 const lanterns = createLanterns(scene, quality);
 const effects = createEffects(scene, quality, lanterns.positions);
@@ -597,7 +597,12 @@ let daytimeFrame = 0;
 let shownLamps = -1;
 ui.setDaytime(daytime.phase());
 renderer.setAnimationLoop(frame);
+// Не больше 60 кадров в секунду (на экранах 120 Гц — каждый второй кадр пропускаем: вдвое меньше работы и батареи),
+// а в меню и на стартовом экране, где почти ничего не движется, — 30
+const FRAME_GAP = { play: 1000 / 60, menu: 1000 / 30 };
 function frame(now) {
+  const quiet = menu.isOpen && !BENCH_SCENE;
+  if (now - last < (quiet ? FRAME_GAP.menu : FRAME_GAP.play) - 3) return; // −3 мс — запас на неровный шаг экрана
   if (++frameCount % 60 === 0) applySkyReflex(scene);
   const realDt = (now - last) / 1000; // настоящая длина кадра — для счётчика (рывки видно как есть)
   const dt = Math.min(realDt, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
@@ -623,7 +628,7 @@ function frame(now) {
   jack.update(dt, menu.isOpen || game.state.shopOpen || game.state.herbariumOpen || !!BENCH_SCENE); // в замере Джек молчит
   if (!menu.isOpen && !BENCH_SCENE) watchForJack(dt);
   dayNight.update();
-  lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
+  lightRays.update(now / 1000, camera, { amount: pipeline.raysOn ? dayNight.state.rays : 0, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
   const { lamps, night: nightDepth } = dayNight.state;
   if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
@@ -659,7 +664,7 @@ function frame(now) {
   placeOn(frontMarker, actionCell());
 
   lighting.shadowTick(frameCount);
-  pipeline.render(dt);
+  pipeline.render(dt, !quiet); // в меню кадры нарочно редкие — сторож их не считает
   stats?.end(realDt);
   devPanel?.tick(now);
 }

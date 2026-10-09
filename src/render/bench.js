@@ -17,11 +17,20 @@ export const BENCH_SCENE = BENCH && BENCH !== 'live' ? BENCH : null;
 
 // Счётчик: кадры в секунду, самый долгий кадр за последние 2 секунды, отрисовок и треугольников за кадр.
 // begin() — в начале кадра, end(dt) — после отрисовки
-export function createStats(renderer, qualityName) {
+// economy() — что сторож кадров сейчас облегчил: { level, steps, off: ['ao', 'rays', 'dpr:1.25', …] }
+export function createStats(renderer, qualityName, economy = () => null) {
   renderer.info.autoReset = false; // считаем все проходы кадра вместе (сцена, тени, эффекты)
   const box = document.createElement('div');
   box.className = 'stats-box';
   document.body.appendChild(box);
+
+  // «ничего» или «тени углов, лучи, чёткость 1,25»
+  const NAMES = { ao: 'затенение углов', rays: 'лучи', tilt: 'размытие краёв' };
+  function lightened() {
+    const e = economy();
+    if (!e || !e.level) return 'ничего';
+    return e.off.map((st) => NAMES[st] || `чёткость ${st.slice(4).replace('.', ',')}`).join(', ');
+  }
 
   const recent = []; // [время, длина кадра в мс] за последние 2 секунды
   let shownAt = 0;
@@ -37,7 +46,7 @@ export function createStats(renderer, qualityName) {
     const fps = last.length;
     const worst = Math.max(0, ...recent.map(([, ms]) => ms));
     const title = BENCH_SCENE ? `замер: ${SCENES[BENCH_SCENE]} · ${Math.max(0, Math.ceil(BENCH_SECONDS - run.t))} с` : `качество: ${qualityName}`;
-    box.innerHTML = `<b>${fps}</b> кадров/с · худший ${worst.toFixed(0)} мс<br>${calls} отрисовок · ${(tris / 1000).toFixed(0)} тыс. треуг.<br><small>${title}</small>`;
+    box.innerHTML = `<b>${fps}</b> кадров/с · худший ${worst.toFixed(0)} мс<br>${calls} отрисовок · ${(tris / 1000).toFixed(0)} тыс. треуг.<br><small>${title} · ${lightened()}</small>`;
   }
 
   // Итог замера сцены: окно с цифрами и кнопками «ещё раз» / «к игре»
@@ -57,6 +66,7 @@ export function createStats(renderer, qualityName) {
         <div><span>1% худших кадров</span><b>${p99.toFixed(0)} мс</b></div>
         <div><span>отрисовок за кадр</span><b>${avgCalls.toFixed(0)}</b></div>
         <div><span>качество</span><b>${qualityName}</b></div>
+        <div><span>сторож облегчил</span><b>${lightened()}</b></div>
         <div><span>экран</span><b>${renderer.domElement.width}×${renderer.domElement.height}</b></div>
       </div>
       <div class="stats-buttons"><button data-go="again">Ещё раз</button><button data-go="game">К игре</button></div>`;

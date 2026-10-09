@@ -31,9 +31,11 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
   // Tilt-shift: верх и низ кадра мягко размыты — будто смотришь на маленькую диораму.
   // Отдельным проходом (размытие нельзя смешивать с другими размытиями в одном проходе)
   let tiltShift = null;
+  let tiltPass = null;
   if (quality.tiltShift) {
     tiltShift = new TiltShiftEffect({ kernelSize: KernelSize.MEDIUM, resolutionScale: 0.5 });
-    composer.addPass(new EffectPass(camera, tiltShift));
+    tiltPass = new EffectPass(camera, tiltShift);
+    composer.addPass(tiltPass);
   }
 
   const bloom = new BloomEffect({ mipmapBlur: true, luminanceSmoothing: 0.2 });
@@ -74,16 +76,45 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
   resize();
   window.addEventListener('resize', resize);
 
-  // Сторож кадров: если кадр долгий — снижаем чёткость (не ниже 0.75), есть запас — возвращаем.
-  // Меряем реальное время между кадрами за 2 секунды. Каждая смена чёткости — заметный рывок (все буферы картинки
-  // создаются заново), поэтому возвращаем осторожно: только после 3 быстрых замеров подряд (6 с)
-  // и не раньше чем через 30 с после снижения — иначе на быстрых экранах (120 Гц) чёткость скачет туда-сюда.
-  let pixelRatio = renderer.getPixelRatio();
+  // Сторож кадров: если кадров мало — по шагу облегчает картинку, есть запас — так же по шагу возвращает.
+  // Шаги — от самого незаметного к заметному: затенение в углах → лучи света → чёткость −0,25 →
+  // размытие краёв (tilt-shift) → чёткость дальше вниз (не ниже 0,75). Всё на лету, без перезагрузки.
+  // Меряем реальное время между кадрами за 2 секунды. Возвращаем осторожно: после 3 быстрых замеров подряд (6 с)
+  // и не раньше чем через 30 с после облегчения — иначе картинка скачет туда-сюда.
+  const steps = [];
+  if (ao) steps.push('ao');
+  steps.push('rays');
+  const dprSteps = [];
+  for (let r = quality.maxDpr - 0.25; r >= 0.75 - 1e-6; r -= 0.25) dprSteps.push(r);
+  if (dprSteps.length) steps.push(`dpr:${dprSteps.shift()}`);
+  if (tiltPass) steps.push('tilt');
+  for (const r of dprSteps) steps.push(`dpr:${r}`);
+  let level = 0; // сколько шагов облегчения сейчас применено
+  const economy = { rays: true }; // лучи света рисует не конвейер, а light-rays.js — main.js спрашивает здесь
+  function applyLevel() {
+    const on = steps.slice(0, level);
+    if (ao) ao.enabled = !on.includes('ao');
+    if (tiltPass) tiltPass.enabled = !on.includes('tilt');
+    economy.rays = !on.includes('rays');
+    const dpr = on.filter((st) => st.startsWith('dpr:')).map((st) => Number(st.slice(4))).pop() ?? quality.maxDpr;
+    const ratio = Math.min(window.devicePixelRatio, dpr);
+    if (ratio !== renderer.getPixelRatio()) {
+      renderer.setPixelRatio(ratio);
+      resize();
+    }
+  }
+
   let frames = 0;
   let windowStart = performance.now();
   let fastWindows = 0;
   let loweredAt = -Infinity;
-  function watchdog(now) {
+  // measure: false — кадры нарочно редкие (меню, 30 кадров/с): такие замеры не считаем
+  function watchdog(now, measure) {
+    if (!measure) {
+      frames = 0;
+      windowStart = now;
+      return;
+    }
     frames++;
     const elapsed = now - windowStart;
     if (elapsed < 2000) return;
@@ -91,19 +122,15 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
     frames = 0;
     windowStart = now;
     if (document.hidden || frameMs > 500) return; // вкладка в фоне — не считается
-    let next = pixelRatio;
-    fastWindows = frameMs < 14 ? fastWindows + 1 : 0;                     // быстрее ~70 кадров/с
-    if (frameMs > 22) {                                                   // медленнее ~45 кадров/с
-      next = Math.max(0.75, pixelRatio - 0.25);
-      if (next !== pixelRatio) loweredAt = now;
-    } else if (fastWindows >= 3 && now - loweredAt > 30000) {
-      next = Math.min(quality.maxDpr, pixelRatio + 0.25);
+    fastWindows = frameMs < 17.8 ? fastWindows + 1 : 0;   // держит полные 60 кадров/с
+    if (frameMs > 22 && level < steps.length) {          // медленнее ~45 кадров/с — облегчить
+      level++;
+      loweredAt = now;
+      applyLevel();
+    } else if (fastWindows >= 3 && level > 0 && now - loweredAt > 30000) {
+      level--;
       fastWindows = 0;
-    }
-    if (next !== pixelRatio) {
-      pixelRatio = next;
-      renderer.setPixelRatio(pixelRatio);
-      resize();
+      applyLevel();
     }
   }
 
@@ -116,11 +143,18 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
       autoLut.mix(luts[a] || luts.evening, luts[b] || luts.evening, t);
     },
     get pixelRatio() {
-      return pixelRatio;
+      return renderer.getPixelRatio();
     },
-    render(dt) {
+    get raysOn() {
+      return economy.rays;
+    },
+    // что сторож сейчас выключил (для панели G и замеров): «2 из 6»
+    get economy() {
+      return { ...economy, level, steps: steps.length, off: steps.slice(0, level) };
+    },
+    render(dt, measure = true) {
       composer.render(dt);
-      watchdog(performance.now());
+      watchdog(performance.now(), measure);
     },
   };
 }
