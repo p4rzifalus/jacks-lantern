@@ -1,14 +1,16 @@
-# Осенняя ферма 2
+# Jack's Lantern
+
+Раньше называлась «Осенняя ферма 2» (отсюда внутренние метки сохранений ogorod2-…, их не меняем).
 
 Браузерная игра: уютный огород днём, лёгкая оборона от милой нечисти ночью.
 Графика: реалистичный мир + пиксельные персонажи, свет и эффекты в духе The Last Night.
 Первая версия (монохромная) живёт отдельно: ~/Claude Projects/osennyaya-ferma, https://p4rzifalus.github.io/osennyaya-ferma/
-Стек: Three.js (WebGL2) + postprocessing (pmndrs) + Vite. Публикация: GitHub Pages (репозиторий osennyaya-ferma-2).
+Стек: Three.js (WebGL2) + postprocessing (pmndrs) + Vite. Публикация: GitHub Pages (репозиторий jacks-lantern).
 
 ## Ссылки для проверки
 - **На компьютере (Chrome):** http://localhost:5174/ — рабочая версия, пока запущен сервер (`npm run dev` или preview «ferma-2»).
 - **С телефона в той же Wi-Fi сети:** http://192.168.0.148:5174/ (адрес компьютера в сети может смениться — тогда смотри строку Network при запуске сервера).
-- **Опубликованная версия:** https://p4rzifalus.github.io/osennyaya-ferma-2/ — обновляется сама после отправки коммитов на GitHub (push).
+- **Опубликованная версия:** https://p4rzifalus.github.io/jacks-lantern/ — обновляется сама после отправки коммитов на GitHub (push).
 
 ## Обо мне
 Я дизайнер, не разработчик. Объясняй решения простыми словами, без жаргона.

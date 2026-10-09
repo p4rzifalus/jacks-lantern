@@ -148,7 +148,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     } else if (name === 'start') {
       const wait = ready ? '' : 'disabled'; // пока мир грузится, кнопки ждут (полоска загрузки — сверху)
       card.innerHTML = `
-        <div class="menu-title title">Осенняя ферма</div>
+        <div class="menu-title title">Jack’s Lantern</div>
         <div class="menu-subtitle">огород на летающем острове</div>
         <div class="menu-buttons column">
           ${hasSave ? `<button class="primary" data-act="continue" ${wait}>Продолжить<small>огород от ${formatDate(savedAt)}</small></button>` : ''}

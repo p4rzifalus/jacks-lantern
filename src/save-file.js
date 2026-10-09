@@ -5,7 +5,7 @@
 import { readSave } from './save.js';
 
 const INFO_KEY = 'ogorod2-file'; // имя последнего файла и время сохранения — для строки в меню
-const FILE_TYPES = [{ description: 'Сохранение «Осенней фермы»', accept: { 'application/json': ['.json'] } }];
+const FILE_TYPES = [{ description: 'Сохранение Jack’s Lantern', accept: { 'application/json': ['.json'] } }];
 
 // Умеет ли браузер перезаписывать файл
 export const canOverwrite = typeof window.showSaveFilePicker === 'function' && typeof window.showOpenFilePicker === 'function';
@@ -126,7 +126,7 @@ export async function openSaveFile() {
     if (!file) return null;
   }
   const data = readSave(await file.text());
-  if (!data) return { error: 'Это не файл сохранения «Осенней фермы»' };
+  if (!data) return { error: 'Это не файл сохранения Jack’s Lantern' };
   if (handle) rememberHandle(handle); // дальше сохраняем в этот же файл
   rememberInfo(file.name, data.savedAt);
   return { data, name: file.name };
