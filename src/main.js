@@ -21,6 +21,7 @@ import { createFogSea } from './world/fog-sea.js';
 import { createLightRays } from './world/light-rays.js';
 import { applySkyReflex, patch as patchSkyReflex } from './render/sky-reflex.js';
 import { createDevPanel, loadFxSettings } from './render/devpanel.js';
+import { BENCH, BENCH_SCENE, createStats } from './render/bench.js';
 import { loadGame, saveGame, clearSave, storeSave, packSave } from './save.js';
 import { createMenu } from './menu.js';
 import { createSound } from './audio/index.js';
@@ -40,6 +41,8 @@ import { PLANT_ORDER, PLANT_FRAME } from './art/sprite-art.js';
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
 const { renderer, scene, camera, cameraControl, world, basket, landmarks, island } = createScene(document.body);
+// Замеры скорости: адрес ?stats — счётчик, ?stats=day|night|rain — эталонная сцена (render/bench.js)
+const stats = BENCH ? createStats(renderer, quality.name) : null;
 const lighting = createLighting(renderer, scene, quality, landmarks.island); // тени — только над ровной серединой острова
 const lanterns = createLanterns(scene, quality);
 const effects = createEffects(scene, quality, lanterns.positions);
@@ -271,7 +274,7 @@ function alreadyKnown() {
 }
 
 // Загрузка сохранения. Растения «досчитываются» сами: стадия считается от момента полива.
-const saved = loadGame();
+const saved = BENCH_SCENE ? null : loadGame(); // в замере — временный огород, сохранение не трогаем
 if (saved) {
   game.load(saved);
   if (saved.jack) jack.load(saved.jack);
@@ -311,7 +314,7 @@ function snapshot() {
 
 function save() {
   // до стартового экрана и пока он открыт ещё не играем — нечего сохранять
-  if (restarting || !menu || menu.isStart) return;
+  if (restarting || !menu || menu.isStart || BENCH_SCENE) return;
   saveGame(snapshot());
 }
 
@@ -400,7 +403,8 @@ try {
   skipIntro = sessionStorage.getItem(SKIP_INTRO) === '1';
   sessionStorage.removeItem(SKIP_INTRO);
 } catch { /* нет доступа — показываем стартовый экран */ }
-if (!skipIntro) menu.showStart();
+if (BENCH_SCENE) setupBenchScene(BENCH_SCENE);
+else if (!skipIntro) menu.showStart();
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
@@ -433,6 +437,31 @@ function guideCell() {
   }
   return best;
 }
+// ---------- Эталонные сцены для замеров (адрес ?stats=day|night|rain) ----------
+// Временный огород: все грядки спелые (разные растения), енот у корзины; сохранение не читается и не пишется
+function setupBenchScene(kind) {
+  const types = Object.keys(PLANTS);
+  game.garden.cells.forEach((c, i) => {
+    if (!isBasket(c)) Object.assign(c, { plant: types[i % types.length], plantedAt: 1, wateredAt: 1, nights: 0 });
+  });
+  hero.position.copy(cellToWorld(BASKET_CELL.x, BASKET_CELL.z + 2));
+  const at = (id, share) => {
+    const p = daytime.phases.find((ph) => ph.id === id);
+    daytime.time = p.start + p.seconds * share;
+    dayNight.refresh();
+  };
+  weather.setRain(kind === 'rain');
+  if (kind === 'day') at('day', 0.3);
+  if (kind === 'rain') at('evening', 0.6);
+  if (kind === 'night') {
+    // тяжёлая ночь: третья по счёту (духи со всех сторон) и ещё 20 духов сверху, по одному каждые четверть секунды
+    game.state.nightsSeen = 3;
+    at('night', 0.05);
+    for (let i = 0; i < 20; i++) setTimeout(() => night.spawnNow(), 300 + i * 250);
+  }
+  game.addCoins(0); // обновить картинку огорода и интерфейс
+}
+
 // ---------- Когда говорит Джек ----------
 // Раз в полсекунды проверяем, не случилось ли что-то впервые; и изредка — атмосферная реплика
 let jackCheck = 0;
@@ -535,8 +564,10 @@ ui.setDaytime(daytime.phase());
 renderer.setAnimationLoop(frame);
 function frame(now) {
   if (++frameCount % 60 === 0) applySkyReflex(scene);
-  const dt = Math.min((now - last) / 1000, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
+  const realDt = (now - last) / 1000; // настоящая длина кадра — для счётчика (рывки видно как есть)
+  const dt = Math.min(realDt, 0.05); // не больше 1/20 с, чтобы не «прыгал» после паузы
   last = now;
+  stats?.begin();
 
   hero.update(dt, input.getMoveDir(), world);
   cameraControl.update(dt, now / 1000, hero.position);
@@ -554,8 +585,8 @@ function frame(now) {
     embers.update(dt, now / 1000, hero.position, game.perks().emberPull ?? undefined);
   }
   popups.update(dt);
-  jack.update(dt, menu.isOpen || game.state.shopOpen || game.state.herbariumOpen);
-  if (!menu.isOpen) watchForJack(dt);
+  jack.update(dt, menu.isOpen || game.state.shopOpen || game.state.herbariumOpen || !!BENCH_SCENE); // в замере Джек молчит
+  if (!menu.isOpen && !BENCH_SCENE) watchForJack(dt);
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
@@ -593,6 +624,7 @@ function frame(now) {
   placeOn(frontMarker, actionCell());
 
   pipeline.render(dt);
+  stats?.end(realDt);
   warmUpTick();
   devPanel?.tick(now);
 }

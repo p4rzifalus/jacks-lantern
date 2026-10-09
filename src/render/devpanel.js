@@ -4,6 +4,7 @@ import GUI from 'lil-gui';
 import { FX, QUALITY } from '../config.js';
 import { HERO_SKINS } from '../art/sprite-art.js';
 import { rememberQuality } from './quality.js';
+import { SCENES } from './bench.js';
 
 const STORAGE_KEY = 'ogorod2-fx';
 
@@ -44,6 +45,12 @@ export function createDevPanel(settings, pipeline, quality, weather, audio, getH
     rememberQuality(name);
     location.reload(); // тени и разрешение меняются только с перезагрузкой
   });
+
+  // Замеры скорости: счётчик и эталонные сцены (страница перезагрузится с ?stats=…; сохранение не трогается)
+  const bench = gui.addFolder('Замеры');
+  bench.add({ go: () => { location.search = '?stats'; } }, 'go').name('счётчик поверх игры');
+  for (const [id, name] of Object.entries(SCENES)) bench.add({ go: () => { location.search = `?stats=${id}`; } }, 'go').name(`замер: ${name}`);
+  bench.close();
 
   const glow = gui.addFolder('Свечение');
   glow.add(settings, 'bloomIntensity', 0, 4, 0.05).name('сила').onChange(changed);
