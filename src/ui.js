@@ -473,7 +473,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   let shopTab = 'coins';
   let lastView = null;
   const shop = el('div', 'shop-backdrop');
-  shop.innerHTML = `<div class="shop store"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
+  shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title flourished">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
     <div class="shop-tabs"><button data-tab="coins" title="семена за монеты">${pixelIcon('coin')}<span class="tab-name">Семена</span></button><button data-tab="embers" title="улучшения за огоньки">${pixelIcon('ember')}<span class="tab-name">Улучшения</span></button></div>
     <div class="shop-list"></div></div>`;
   const shopList = shop.querySelector('.shop-list');
@@ -546,7 +546,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
 
   // Гербарий: карточки всех растений; неоткрытые — силуэт и «???»
   const herbarium = el('div', 'shop-backdrop herbarium-backdrop');
-  herbarium.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Гербарий</span><span class="herb-count"></span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="herb-grid"></div></div>';
+  herbarium.innerHTML = '<div class="shop"><div class="shop-head"><span class="title flourished">Гербарий</span><span class="herb-count"></span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="herb-grid"></div></div>';
   const herbGrid = herbarium.querySelector('.herb-grid');
   const herbCount = herbarium.querySelector('.herb-count');
   herbarium.addEventListener('click', (e) => {
@@ -600,6 +600,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
         daytimeIcon.innerHTML = pixelIcon(DAYTIME_ICONS[phase.id] || 'sun');
         daytimeBox.title = phase.name; // слово — только в подсказке при наведении
         daytimeBox.dataset.phase = phase.id;
+        document.body.dataset.phase = phase.id; // ночью бумага интерфейса чуть темнее (ui.css)
       }
       daytimeFill.style.width = `${Math.round((1 - phase.progress) * 100)}%`;
     },

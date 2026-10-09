@@ -85,7 +85,7 @@
 Касается всего интерфейса: окон, панели инструментов внизу, монет и времени суток, меню, стартового экрана,
 реплик Джека. Образцы стиля — `docs/ui-refs/` (главный — `02-parchment-quest-skills.webp`).
 Пока картинок нет, игра рисует заглушки сама. Кладёшь PNG в `art/` под именем из таблицы — игра берёт его.
-`npm run art` для этих картинок не нужен.
+После добавления или замены запусти `npm run art`: обрежет пустые поля и сделает лёгкие копии в `art/web/ui/`.
 
 **Общий хвост (добавить в конец каждого задания, кроме обложки):**
 > Hand-painted storybook game UI asset, cozy autumn fantasy, warm parchment tones and dark brown dip-pen ink outlines, soft flat even lighting, no shadows cast on the background, no text, no letters, no numbers.

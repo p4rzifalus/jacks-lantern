@@ -4,6 +4,8 @@
 //   для реалистичных текстур (config.js → REALISTIC) — ещё и заранее посчитанные карты, которые раньше браузер
 //   считал при каждом запуске: <имя>_n (рельеф), <имя>_r (шероховатость), <имя>_ao (затенение во впадинах).
 // Небо (sky-*) — одного размера для всех: оно на весь экран, уменьшать его заметно.
+// Картинки интерфейса (ui-*) — в art/web/ui/, одного размера для всех: пустые прозрачные поля обрезаются,
+//   длинная сторона — UI_SIZES (они на экране небольшие).
 // Пиксельные спрайты (PNG) не трогаем — им нужна каждая точка.
 import { readdir, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,6 +16,7 @@ const ART = path.resolve('art');
 const WEB = path.join(ART, 'web');
 const SIZES = [1024, 512];   // размеры текстур: для компьютера и для телефона
 const SKY_SIZE = 1024;       // небо — одно на всех
+const UI_SIZES = { 'ui-paper': 512, 'ui-card': 512, 'ui-vine': 384, 'ui-flourish': 384, 'ui-divider': 768 };
 const QUALITY = 72;          // качество WebP для картинок (0–100): ниже — легче файл, но мельче детали
 const MAP_QUALITY = 80;      // для карт рельефа: сжатие на них видно меньше, чем кажется
 
@@ -52,14 +55,40 @@ async function reliefMaps(file, size, strength) {
   return { normal, rough, ao };
 }
 
+// Обрезать прозрачные поля: рамка по точкам, которые заметно видно (почти прозрачная «пыль» не считается)
+async function trimAlpha(file) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let [left, top, right, bottom] = [info.width, info.height, -1, -1];
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      if (data[(y * info.width + x) * 4 + 3] < 24) continue;
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+    }
+  }
+  if (right < 0) return sharp(file).toBuffer();
+  return sharp(file).extract({ left, top, width: right - left + 1, height: bottom - top + 1 }).toBuffer();
+}
+
 const save = (pixels, size, channels, file, quality) =>
   sharp(pixels, { raw: { width: size, height: size, channels } }).webp({ quality }).toFile(file);
 
 const files = (await readdir(ART)).filter((f) => /\.(jpe?g|webp)$/i.test(f));
 await rm(WEB, { recursive: true, force: true });
 for (const size of SIZES) await mkdir(path.join(WEB, String(size)), { recursive: true });
+await mkdir(path.join(WEB, 'ui'), { recursive: true });
 
 let count = 0;
+for (const file of await readdir(ART)) {
+  const name = file.replace(/\.[^.]+$/, '');
+  if (!UI_SIZES[name] || !/\.(png|jpe?g|webp)$/i.test(file)) continue;
+  const side = UI_SIZES[name];
+  // бумага — бесшовная, её не обрезаем; у остальных — убрать прозрачные поля вокруг рисунка
+  const trimmed = name === 'ui-paper' ? await sharp(path.join(ART, file)).toBuffer() : await trimAlpha(path.join(ART, file));
+  await sharp(trimmed).resize(side, side, { fit: 'inside' }).webp({ quality: 85, alphaQuality: 90 }).toFile(path.join(WEB, 'ui', `${name}.webp`));
+  count++;
+  console.log(`готово: ${name}`);
+}
 for (const file of files) {
   const name = file.replace(/\.[^.]+$/, '');
   const source = path.join(ART, file);

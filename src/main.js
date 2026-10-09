@@ -8,7 +8,7 @@ import { Hero } from './hero.js';
 import { GardenView } from './world/garden-view.js';
 import { createInput } from './input.js';
 import { createUI, TOOLS } from './ui.js';
-import { initUISkin } from './ui-skins.js';
+import { initUIArt } from './ui-art.js';
 import { createPopups } from './popups.js';
 import { createDecor } from './decor.js';
 import { detectQuality } from './render/quality.js';
@@ -40,7 +40,7 @@ import { getSheets } from './world/sheets.js';
 import { PLANT_ORDER, PLANT_FRAME } from './art/sprite-art.js';
 
 const quality = detectQuality();
-initUISkin(); // этап 14а: вариант стиля окон из ?ui= или панели G
+initUIArt(); // бумага, рамки и украшения интерфейса
 
 // ---------- Загрузка: полоска сверху, пока грузятся картинки и готовятся шейдеры ----------
 // Все картинки грузятся через общий «диспетчер загрузок» three.js — по нему и считаем, сколько готово

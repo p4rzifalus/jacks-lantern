@@ -5,7 +5,6 @@ import { FX, QUALITY } from '../config.js';
 import { HERO_SKINS } from '../art/sprite-art.js';
 import { rememberQuality } from './quality.js';
 import { SCENES } from './bench.js';
-import { UI_SKINS, setUISkin } from '../ui-skins.js';
 
 const STORAGE_KEY = 'ogorod2-fx';
 
@@ -52,10 +51,6 @@ export function createDevPanel(settings, pipeline, quality, weather, audio, getH
   bench.add({ go: () => { location.search = '?stats'; } }, 'go').name('счётчик поверх игры');
   for (const [id, name] of Object.entries(SCENES)) bench.add({ go: () => { location.search = `?stats=${id}`; } }, 'go').name(`замер: ${name}`);
   bench.close();
-
-  // Этап 14а: варианты стиля окон (откройте магазин — клавиша 4)
-  const ui = { skin: document.body.dataset.ui || '' };
-  gui.add(ui, 'skin', Object.fromEntries(Object.entries(UI_SKINS).map(([id, name]) => [name, id]))).name('стиль окон (14а)').onChange(setUISkin);
 
   const glow = gui.addFolder('Свечение');
   glow.add(settings, 'bloomIntensity', 0, 4, 0.05).name('сила').onChange(changed);

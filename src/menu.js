@@ -158,7 +158,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
         <div class="menu-status">${escapeHtml(statusText)}</div>`;
     } else if (name === 'menu') {
       card.innerHTML = `
-        <div class="menu-head"><span class="title">Меню</span><button class="menu-close" data-act="close" aria-label="Закрыть">✕</button></div>
+        <div class="menu-head"><span class="title flourished">Меню</span><button class="menu-close" data-act="close" aria-label="Закрыть">✕</button></div>
         <div class="menu-section">
           ${soundRow('effects', 'Звуки')}
           ${soundRow('music', 'Музыка')}
