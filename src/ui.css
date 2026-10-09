@@ -54,10 +54,11 @@ body { font-family: var(--font); color: var(--ink); }
   transition: filter 2s, transform 0.12s;
 }
 .toolbar button:active, .seed-row button:active, .corner-bar button:active { transform: translateY(2px); }
-/* выбранное — та же бумага, только темнее (подложка под значком); рамка ::after — только когда кнопка зовёт */
+/* выбранное — вся кнопка темнее и в золотой обводке; рамка ::after — только когда кнопка зовёт */
 .toolbar button::before, .seed-row button::before, .corner-bar button::before {
-  content: ''; position: absolute; z-index: -1; inset: -9px; border-radius: 8px; pointer-events: none;
-  background: rgba(110, 62, 16, 0.36); opacity: 0; transition: opacity 0.15s;
+  /* до самого чернильного контура карточки (он в 2 точках от края), по краю — тёплая золотая обводка */
+  content: ''; position: absolute; z-index: -1; inset: calc(2px - var(--card-edge)); border-radius: 7px; pointer-events: none;
+  background: rgba(110, 62, 16, 0.36); box-shadow: 0 0 0 2px #e0a93a; opacity: 0; transition: opacity 0.15s;
 }
 .toolbar button.selected::before, .seed-row button.selected::before, .corner-bar button.on::before { opacity: 1; }
 .toolbar button::after {
