@@ -6,7 +6,7 @@ import { JACK } from './config.js';
 import { FIRST, AMBIENT, SLEEPY } from './lines.js';
 import { createPortrait } from './art/jack-art.js';
 
-// onType() — напечаталась буква (звук клавиши)
+// onType(ch, { text, at, sleepy }) — напечаталась буква (голос Джека)
 export function createJack({ onType }) {
   const box = document.createElement('div');
   box.className = 'jack';
@@ -112,7 +112,7 @@ export function createJack({ onType }) {
         while (typed >= 1 && line.shown < line.text.length) {
           typed -= 1;
           const ch = line.text[line.shown++];
-          if (ch.trim()) onType();
+          if (ch.trim()) onType(ch, { text: line.text, at: line.shown, sleepy: !awake });
         }
         show();
         return;

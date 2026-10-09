@@ -1,6 +1,7 @@
 // Звуки действий: посадка, полив, сбор, монеты, шаги героя, кнопки интерфейса.
 // Всё собрано из тонов и шума (synth.js) — поменять звук = поменять числа здесь.
 import { tone, noise, rand, noteHz } from './synth.js';
+import { JACK } from '../config.js';
 
 const FX = 'effects';
 
@@ -17,6 +18,8 @@ export function createSfx(engine) {
     });
     noise(engine, FX, { when, type: 'highpass', freq: 5000, gain: gain * 0.5, decay: 0.03 });
   }
+
+  let voiceCount = 0; // сколько букв прозвучало — чтобы пищать через одну (JACK.voice.every)
 
   const sfx = {
     // Посадка: лапки роют землю (два-три шороха) и мягкий «тук» семечка
@@ -188,11 +191,18 @@ export function createSfx(engine) {
       }
     },
 
-    // Джек печатает реплику: тихий сухой щелчок клавиши, каждый чуть другой
-    typeKey() {
-      if (!ready()) return;
-      noise(engine, FX, { type: 'bandpass', freq: rand(2600, 3800), q: 3, gain: rand(0.035, 0.05), attack: 0.001, decay: rand(0.012, 0.02) });
-      tone(engine, FX, { freq: rand(900, 1300), type: 'triangle', gain: 0.012, decay: 0.02 });
+    // Голос Джека, как в старых играх: короткий писк на букву. Нота — от самой буквы (одно слово звучит одинаково),
+    // в конце вопроса голос поднимается, днём (sleepy) — ниже. text и at — вся реплика и где сейчас буква
+    jackVoice(ch, { text = '', at = 0, sleepy = false } = {}) {
+      if (!ready() || !/[\p{L}\d]/u.test(ch)) return;
+      const v = JACK.voice;
+      if (voiceCount++ % v.every) return;
+      const code = ch.toLowerCase().codePointAt(0);
+      const rest = text.slice(at);
+      const end = rest.search(/[.!?…]/);
+      const asking = end >= 0 && end < 8 && rest[end] === '?';
+      const f = noteHz((sleepy ? v.sleepyPitch : v.pitch) + v.scale[code % v.scale.length] + (asking ? v.question : 0));
+      tone(engine, FX, { freq: f, freqEnd: f * 0.94, glide: v.length, type: v.wave, gain: v.gain, attack: 0.003, decay: v.length, filter: 2400 });
     },
 
     // Кнопки: тихий деревянный щелчок

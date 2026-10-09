@@ -75,7 +75,7 @@ const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, 
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
 // Фонарь Джек — рассказчик: реплики внизу экрана (тексты — lines.js)
-const jack = createJack({ onType: () => sound.typeKey() });
+const jack = createJack({ onType: (ch, info) => sound.jackVoice(ch, info) });
 const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight, spawnSpirit: () => night.spawnNow(), ripenAll }) : null;
 
 // ---------- Правила ----------
@@ -492,7 +492,7 @@ const intro = createIntro({
       sound.emberPicked();
     }
   },
-  onType: () => sound.typeKey(),
+  onType: (ch, info) => sound.jackVoice(ch, info),
   onDone() {
     jackHook.sleep();
     jackHook.wake(2.5); // ещё чуть погорит и заснёт до вечера

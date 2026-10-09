@@ -6,7 +6,7 @@ import { createPortrait } from './art/jack-art.js';
 
 const CAMERA_PAUSE = 1.1; // сколько секунд камера едет к кадру, прежде чем появится текст
 
-// onShot(shot, instant) — поставить камеру на кадр; onType() — напечаталась буква реплики Джека; onDone() — в игру
+// onShot(shot, instant) — поставить камеру на кадр; onType(ch, { text, at }) — напечаталась буква реплики Джека (голос); onDone() — в игру
 export function createIntro({ onShot, onType, onDone }) {
   const box = document.createElement('div');
   box.className = 'jack story';
@@ -109,7 +109,8 @@ export function createIntro({ onShot, onType, onDone }) {
       typed += dt * JACK.typeSpeed;
       while (typed >= 1 && shown < text.length) {
         typed -= 1;
-        if (text[shown++].trim() && who) onType();
+        const ch = text[shown++];
+        if (ch.trim() && who) onType(ch, { text, at: shown });
       }
       show();
     },
