@@ -210,8 +210,8 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     // Сколько это ночей уже было и какая сейчас (для проверки)
     get plan() { return plan; },
 
-    // heroAt — где енот (в клетках): его фонарь горит ночью
-    update(dt, heroAt = null) {
+    // heroAt — где енот (в клетках); lantern — Джек у него: тогда его свет пугает духов
+    update(dt, heroAt = null, lantern = true) {
       const phase = daytime.phase();
       if (phase.id === 'night' && !active) startNight(heroAt);
       if (phase.id !== 'night' && active) endNight();
@@ -221,7 +221,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
         warned.splice(warned.indexOf(w), 1);
         spawn(w.kind, w.from);
       }
-      if (spirits.length) attack(dt, active ? heroAt : null);
+      if (spirits.length) attack(dt, active && lantern ? heroAt : null);
       if (!active) return;
       clock += dt;
       while (queue.length && queue[0].at - SPIRITS.warnSeconds <= clock) {

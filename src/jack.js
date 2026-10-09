@@ -1,8 +1,10 @@
-// Фонарь Джек — рассказчик. Реплики появляются внизу экрана с его именем и печатаются по буквам.
+// Фонарь Джек — рассказчик. Реплики появляются внизу экрана с его портретом и именем и печатаются по буквам.
+// Портрет (art/jack-art.js) шевелит «ртом», пока печатается реплика; днём Джек сонный, вечером и ночью — бодрый.
 // Тексты — lines.js, паузы и частота — config.js → JACK.
 // Первые события звучат по разу за игру (что уже сказано — say.toSave / load), атмосферные — изредка, утренняя — каждое утро.
 import { JACK } from './config.js';
-import { FIRST, AMBIENT } from './lines.js';
+import { FIRST, AMBIENT, SLEEPY } from './lines.js';
+import { createPortrait } from './art/jack-art.js';
 
 // onType() — напечаталась буква (звук клавиши)
 export function createJack({ onType }) {
@@ -10,7 +12,10 @@ export function createJack({ onType }) {
   box.className = 'jack';
   box.innerHTML = '<div class="jack-name title">Джек</div><div class="jack-text"></div>';
   const textNode = box.querySelector('.jack-text');
+  const portrait = createPortrait();
+  box.prepend(portrait.canvas);
   document.body.appendChild(box);
+  let awake = true; // бодрый или сонный (см. setAwake)
 
   const said = new Set(); // какие первые события уже прозвучали
   const queue = [];       // что ещё сказать
@@ -75,6 +80,19 @@ export function createJack({ onType }) {
       queue.push(lastAmbient);
     },
 
+    // Разбудили днём: сонная реплика (если сейчас молчит)
+    sleepy() {
+      if (line || queue.length) return;
+      const pool = SLEEPY.filter((t) => t !== lastAmbient);
+      lastAmbient = pool[Math.floor(Math.random() * pool.length)];
+      queue.push(lastAmbient);
+    },
+
+    // Бодрый (вечер, ночь, Джек у енота) или сонный (день) — так он выглядит на портрете
+    setAwake(on) {
+      awake = on;
+    },
+
     get speaking() {
       return !!line || queue.length > 0;
     },
@@ -88,6 +106,7 @@ export function createJack({ onType }) {
         if (!line) return;
       }
       place();
+      portrait.update(dt, { talking: line.shown < line.text.length, awake });
       if (line.shown < line.text.length) {
         typed += dt * JACK.typeSpeed;
         while (typed >= 1 && line.shown < line.text.length) {

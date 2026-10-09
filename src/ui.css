@@ -32,7 +32,7 @@ body[data-phase='evening'], body[data-phase='morning'] { --paper-light: 0.92; }
 
 body { font-family: var(--font); color: var(--ink); }
 .title { font-family: var(--font-title); font-weight: 700; letter-spacing: 0.03em; }
-.pixel-icon { fill: currentColor; }
+.pixel-icon { fill: currentColor; flex: none; } /* значки 16×16 (icons.js): на экране ровно 16, 32 или 48 точек */
 
 /* ---------- Карточка: бумага с чернильным контуром, растягивается на любой размер ---------- */
 .toolbar button, .seed-row button, .corner-bar button, .hud, .daytime, .shop, .menu, .jack {
@@ -54,14 +54,14 @@ body { font-family: var(--font); color: var(--ink); }
   transition: filter 2s, transform 0.12s;
 }
 .toolbar button:active, .seed-row button:active, .corner-bar button:active { transform: translateY(2px); }
-/* выбранное: зелёная рамка внутри карточки */
-.toolbar button::after, .seed-row button::after, .corner-bar button::after {
-  content: ''; position: absolute; inset: -6px; border-radius: 9px; pointer-events: none;
-  border: 3px solid transparent; transition: border-color 0.15s;
+/* выбранное — та же бумага, только темнее (подложка под значком); рамка ::after — только когда кнопка зовёт */
+.toolbar button::before, .seed-row button::before, .corner-bar button::before {
+  content: ''; position: absolute; z-index: -1; inset: -9px; border-radius: 8px; pointer-events: none;
+  background: rgba(110, 62, 16, 0.36); opacity: 0; transition: opacity 0.15s;
 }
-.toolbar button.selected, .seed-row button.selected, .corner-bar button.on { transform: translateY(-3px); color: var(--green-dark); }
-.toolbar button.selected::after, .seed-row button.selected::after, .corner-bar button.on::after {
-  border-color: var(--green); box-shadow: inset 0 0 0 1px rgba(255, 250, 230, 0.6);
+.toolbar button.selected::before, .seed-row button.selected::before, .corner-bar button.on::before { opacity: 1; }
+.toolbar button::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 9px; pointer-events: none; border: 3px solid transparent;
 }
 .key { position: absolute; font-family: var(--font); font-size: 11px; font-weight: 700; color: var(--ink-dim); line-height: 1; }
 @media (pointer: coarse) { .key { display: none; } } /* на телефоне клавиш нет */
@@ -86,6 +86,7 @@ body { font-family: var(--font); color: var(--ink); }
   touch-action: manipulation;
 }
 .shop-close:hover, .menu-close:hover { filter: brightness(1.1); }
+.shop-close .pixel-icon, .menu-close .pixel-icon { width: 16px; height: 16px; display: block; margin: auto; }
 
 /* заголовок с завитками: ~ Магазин ~ */
 .flourished { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
@@ -113,14 +114,14 @@ body { font-family: var(--font); color: var(--ink); }
   background: linear-gradient(var(--paper-shade), var(--paper-shade)), var(--ui-paper) center / 256px;
   border: 2.5px solid #5b4128; border-bottom: none; border-radius: 12px 12px 0 0;
 }
-.shop-tabs .pixel-icon { width: 20px; height: 20px; }
+.shop-tabs .pixel-icon { width: 16px; height: 16px; }
 .shop-tabs button.selected[data-tab='coins'] { background: #9cb86a; border-color: var(--green-dark); color: #22340f; }
 .shop-tabs button.selected[data-tab='embers'] { background: var(--lilac); border-color: var(--lilac-dark); color: #2a2150; }
 
 /* ---------- Панель инструментов и ряд семян ---------- */
 .toolbar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 10px; }
 .toolbar button { width: 72px; height: 72px; }
-.toolbar .pixel-icon { width: 40px; height: 40px; }
+.toolbar .pixel-icon { width: 48px; height: 48px; }
 .toolbar .key { top: -6px; left: -4px; }
 .toolbar .count { position: absolute; top: -7px; right: -6px; font-size: 13px; font-weight: 700; color: var(--ink-dim); } /* «1/2» на корзинке */
 .toolbar .count.full { color: var(--green-dark); }
@@ -129,18 +130,20 @@ body { font-family: var(--font); color: var(--ink); }
 .toolbar button.beckon:not(.selected)::after { animation: beckon 1.6s ease-in-out infinite; }
 
 .seed-row {
-  position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); display: none; gap: 6px;
-  max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center;
+  /* на всю ширину (с полями), кнопки — по центру; иначе ряд сжимается до половины экрана и встаёт столбиком */
+  position: fixed; left: 12px; right: 12px; bottom: 100px; display: none; gap: 6px;
+  flex-wrap: wrap; justify-content: center; pointer-events: none;
 }
+.seed-row button { pointer-events: auto; }
 .seed-row.visible { display: flex; }
-.seed-row button { min-height: 44px; padding: 0 4px; font-size: 16px; white-space: nowrap; }
+.seed-row button { min-height: 52px; padding: 0 4px 0 0; font-size: 16px; white-space: nowrap; }
+.seed-row .plant-pic { width: 64px; height: 80px; margin: -26px -8px -10px -10px; } /* у рисунка пустой верх и бока — поджимаем */
 .seed-row button b { margin-left: 6px; font-weight: 700; color: var(--ink-dim); }
-.seed-row button.selected b { color: var(--green-dark); }
 
 /* ---------- Угол: меню, гербарий, камера ---------- */
 .corner-bar { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; }
 .corner-bar button { width: 52px; height: 52px; }
-.corner-bar .pixel-icon { width: 28px; height: 28px; }
+.corner-bar .pixel-icon { width: 32px; height: 32px; }
 .corner-bar .key { top: -9px; left: -6px; font-size: 10px; }
 .view-bar { top: 74px; }
 .view-bar button { color: var(--ink-dim); }
@@ -151,17 +154,13 @@ body { font-family: var(--font); color: var(--ink); }
   position: fixed; top: 12px; right: 12px; display: flex; gap: 14px; padding: 0 6px; font-size: 22px; line-height: 1.2;
 }
 .hud span { display: inline-flex; align-items: center; gap: 5px; }
-.hud .pixel-icon { width: 20px; height: 20px; color: var(--coin); }
-.hud .embers .pixel-icon { color: #c4571f; }
+.hud .pixel-icon { width: 16px; height: 16px; }
 .daytime {
   --card-edge: var(--card-edge-small);
-  position: fixed; top: 64px; right: 12px; padding: 0 4px; display: grid; grid-template-columns: auto auto;
-  column-gap: 7px; align-items: center; color: var(--coin);
+  position: fixed; top: 80px; right: 12px; padding: 0; display: flex;
 }
-.daytime-icon .pixel-icon { width: 22px; height: 22px; display: block; }
-.daytime-bar { grid-column: 1 / -1; width: 30px; height: 4px; margin: 4px auto 0; border-radius: 2px; background: var(--paper-shade); overflow: hidden; }
-.daytime-bar i { display: block; height: 100%; background: currentColor; }
-.daytime[data-phase='night'] { color: var(--moon); }
+/* циферблат суток (icons.js → drawDayDial): 16×16, на экране 32 */
+.daytime-dial { display: block; width: 32px; height: 32px; image-rendering: pixelated; }
 body.intro .daytime { display: none; }
 
 /* ---------- Окна: магазин и гербарий ---------- */
@@ -197,7 +196,7 @@ body.intro .daytime { display: none; }
 .plant-pic.locked { filter: brightness(0); opacity: 0.35; }
 .stats { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 4px; font-size: 15px; color: var(--ink-dim); }
 .stat { display: inline-flex; align-items: center; gap: 4px; }
-.stat .pixel-icon { width: 18px; height: 18px; }
+.stat .pixel-icon { width: 16px; height: 16px; }
 .stat.moons { gap: 1px; color: var(--moon); } /* ночи на страже — лунным цветом */
 .shop-name .stat { font-size: 15px; color: var(--ink-dim); }
 /* что нужно, чтобы открыть: маленькое растение и метки, сколько уже собрано */
@@ -224,7 +223,8 @@ body.intro .daytime { display: none; }
 .tree-step .shop-buy { margin-top: 0; }
 .tree-step .shop-buy button { padding: 0 12px; height: 38px; }
 .tree-done, .tree-price { font-size: 14px; color: var(--ink-dim); white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
-.tree-price .pixel-icon { width: 14px; height: 14px; }
+.tree-price .pixel-icon, .tree-done .pixel-icon { width: 16px; height: 16px; }
+.tree-done { color: var(--lilac-dark); }
 /* гербарий: сетка карточек; неоткрытые — тёмный силуэт */
 .herb-count { margin-left: 8px; font-family: var(--font); font-size: 15px; font-weight: 400; color: var(--ink-dim); letter-spacing: 0; }
 .herb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 8px 6px 6px; }
@@ -304,6 +304,29 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
 }
 .jack-text { font-size: 17px; line-height: 1.45; min-height: 1.45em; }
 .jack-rest { visibility: hidden; }
+/* портрет Джека слева от текста: пиксельный, крупными квадратами */
+.jack { display: flex; align-items: center; gap: 10px; }
+.jack-portrait {
+  flex: none; width: 72px; height: 72px; margin: -22px 0 -14px -10px; /* выглядывает из карточки */
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 6px rgba(255, 196, 90, 0.45));
+}
+
+/* ---------- Вступление новой игры: карточка внизу, интерфейс спрятан ---------- */
+body.story .toolbar, body.story .seed-row, body.story .hud, body.story .corner-bar, body.story .popups,
+body.story .daytime, body.story .jack:not(.story) { display: none; }
+.jack.story { bottom: max(40px, env(safe-area-inset-bottom)); max-width: min(520px, calc(100vw - 32px)); }
+.jack.story:not(.speaker) .jack-portrait, .jack.story:not(.speaker) .jack-name { display: none; }
+.jack.story .jack-text { font-size: 18px; }
+/* всё напечатано — мигает «дальше» */
+.jack.story.done .jack-text::after { content: ' ›'; animation: story-next 1.1s ease-in-out infinite; }
+@keyframes story-next { 50% { opacity: 0.2; } }
+.story-skip {
+  position: absolute; right: 0; top: calc(-34px - var(--card-edge)); padding: 4px 8px;
+  font: inherit; font-size: 15px; color: var(--cream); background: none; border: none; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); opacity: 0.8;
+}
+.story-skip:hover { opacity: 1; }
 
 /* ---------- Над миром: пузырь мысли, всплывающие числа, мешочек семян ---------- */
 .popups { position: fixed; inset: 0; pointer-events: none; }
@@ -315,7 +338,7 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
   transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.6, 1), opacity 0.18s;
 }
 .thought.visible { transform: translate(-50%, -100%) scale(1); opacity: 1; }
-.thought .pixel-icon { width: 26px; height: 26px; display: block; }
+.thought .pixel-icon { width: 32px; height: 32px; display: block; }
 /* хвостик пузыря — два кружочка к голове */
 .thought::before, .thought::after {
   content: ''; position: absolute; border-radius: 50%; background: var(--ui-paper) center / 256px; border: 2px solid #4e2f17;
@@ -328,9 +351,9 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
   font-size: 24px; color: var(--amber); white-space: nowrap;
   text-shadow: -1.5px 0 #3a2410, 1.5px 0 #3a2410, 0 -1.5px #3a2410, 0 1.5px #3a2410, 0 3px 6px rgba(0, 0, 0, 0.5);
 }
-.float .pixel-icon { width: 18px; height: 18px; filter: drop-shadow(0 0 1.5px #3a2410); }
+.float .pixel-icon { width: 16px; height: 16px; }
 .fly-seed { position: fixed; color: var(--amber); pointer-events: none; transition: transform 0.9s cubic-bezier(0.5, -0.4, 0.6, 1), opacity 0.9s; }
-.fly-seed .pixel-icon { width: 28px; height: 28px; filter: drop-shadow(0 0 6px var(--amber)); }
+.fly-seed .pixel-icon { width: 32px; height: 32px; filter: drop-shadow(0 0 6px var(--amber)); }
 
 /* полоска загрузки сверху: заполняется, пока грузятся картинки и готовятся шейдеры, потом тает */
 .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 70; pointer-events: none; transition: opacity 0.6s 0.2s; }

@@ -1,4 +1,4 @@
-// Фонари: столбы по краям дорожки, фонарик на дереве, лампа у двери и свет из окон.
+// Фонари: столбы по краям дорожки, фонарик на дереве и свет у двери (это светит Джек на крюке, см. world/jack-hook.js).
 // Каждый — настоящий тёплый источник света; часть отбрасывает тени (сколько — зависит от качества).
 import * as THREE from 'three';
 import { LIGHTING, LANTERNS } from '../config.js';
@@ -116,8 +116,11 @@ export function createLanterns(scene, quality) {
     lights.push({ light, base: intensity, phase: Math.random() * 10, shadowStale: true });
   };
 
-  // Лампа у двери — первая, чтобы тень досталась ей
+  // Свет у двери — первый, чтобы тень досталась ему. Это Джек на крюке: когда енот его забрал, у двери темно
   addLight(LANTERNS.door, LIGHTING.lanternColor, LIGHTING.lanternIntensity * 0.35, LIGHTING.lanternDistance, true);
+  const door = lights[0];
+  let doorLevel = 1; // 1 — Джек на крюке, 0 — у енота
+  let doorFlare = 0; // Джек проснулся (вступление): светит и днём
 
   // Столбы по краям дорожки, фонарь повёрнут к огороду
   for (const p of LANTERNS.posts) {
@@ -155,9 +158,14 @@ export function createLanterns(scene, quality) {
     // Живой огонь: свет чуть подрагивает. Тень фонаря — это 6 перерисовок всего, что рядом с ним, поэтому обновляем её
     // только когда фонарь горит и рядом кто-то ходит (раз в 3 кадра), да изредка — вдруг выросло растение.
     // lamps — горят ли фонари: 0 — погашены (день), 1 — горят (вечер и ночь); movers — где сейчас герой и духи
+    // Свет у двери: level — висит ли там Джек (0…1), flare — светит, даже когда остальные фонари погашены
+    setDoor(level, flare = 0) {
+      doorLevel = level;
+      doorFlare = flare;
+    },
     update(time, lamps = 1, movers = []) {
       frame++;
-      const lit = lamps > 0.01;
+      const lit = lamps > 0.01 || doorFlare > 0.01;
       lights.forEach((l, i) => {
         if (!l.light.castShadow) return;
         if (!lit) { l.shadowStale = true; return; } // днём тень не видна — обновим, когда зажжётся
@@ -168,7 +176,8 @@ export function createLanterns(scene, quality) {
         }
       });
       for (const l of lights) {
-        l.light.intensity = lamps * l.base * (0.92 + 0.05 * Math.sin(time * 7 + l.phase) + 0.03 * Math.sin(time * 13 + l.phase * 2));
+        const level = l === door ? Math.max(lamps * doorLevel, doorFlare) : lamps;
+        l.light.intensity = level * l.base * (0.92 + 0.05 * Math.sin(time * 7 + l.phase) + 0.03 * Math.sin(time * 13 + l.phase * 2));
       }
       for (const c of cones) {
         c.visible = lamps > 0.01;

@@ -31,6 +31,8 @@ import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
 import { createNight } from './night.js';
 import { createJack } from './jack.js';
+import { createIntro } from './intro.js';
+import { createJackHook } from './world/jack-hook.js';
 import { morningLine } from './lines.js';
 import { createEmbers } from './world/embers.js';
 import { createAttacks } from './world/attacks.js';
@@ -151,6 +153,36 @@ hero.position.copy(cellToWorld(HERO_START.x, HERO_START.z));
 hero.heading = hero.targetHeading = Math.PI; // смотрит на огород
 scene.add(hero.object);
 
+// ---------- Джек: днём спит на крюке у двери, вечером его можно взять, утром он сам возвращается ----------
+const jackHook = createJackHook(scene);
+let jackHeld = false; // Джек у енота (светит ему) или на крюке
+const jackPhase = () => daytime.phase().id;
+const canTakeJack = () => JACK.takePhases.includes(jackPhase());
+const nearHook = () => Math.hypot(hero.position.x - JACK.hook.x, hero.position.z - JACK.hook.z) <= JACK.reach;
+// Енот у крюка: вечером и ночью — берёт Джека, днём — Джек сонно ворчит
+function useHook() {
+  if (jackHeld) return;
+  hero.targetHeading = Math.atan2(JACK.hook.x - hero.position.x, JACK.hook.z - hero.position.z); // лицом к крюку
+  if (!canTakeJack()) {
+    jackHook.wake(1.5); // приоткрыл глаз
+    jack.sleepy();
+    return;
+  }
+  jackHeld = true;
+  hero.playAction();
+  sound.emberPicked();
+  effects.sparkle(jackHook.position.clone().setY(JACK.hook.y));
+  jack.first('gotJack');
+  save();
+}
+// Утром Джек сам на крюке (и в сохранении, сделанном ночью, если загрузили днём)
+function returnJack() {
+  if (!jackHeld) return;
+  jackHeld = false;
+  save();
+}
+let hookShown = true; // виден ли Джек на крюке — чтобы при возвращении вспыхнуть искорками
+
 // ---------- Ночь: духи ----------
 const ATTACK_SOUNDS = {
   whip: () => sound.plantWhip(), spark: () => sound.plantSpark(), wall: () => sound.plantThump(),
@@ -168,7 +200,7 @@ const night = createNight({
   onSpawn(spirit) {
     spirits.add(spirit);
     if (spirit.kind === 'skeleton') jack.first('firstSkeleton');
-    else if (spirit.kind === 'ghost') jack.first('firstGhost');
+    else if (spirit.kind === 'ghost') jack.first(jackHeld ? 'firstGhost' : 'ghostNoJack');
   },
   // растения бьют духов: как выглядит — world/attacks.js
   onAttack(event) {
@@ -285,7 +317,7 @@ function alreadyKnown() {
   const { state } = game;
   const known = [];
   if (Object.keys(state.harvested).length) known.push('start', 'thirsty', 'firstRipe', 'basketFull', 'firstSale');
-  if (state.nightsSeen > 0) known.push('evening', 'firstGhost', 'firstScared', 'firstEmber', 'plantHit', 'firstStolen');
+  if (state.nightsSeen > 0) known.push('evening', 'firstGhost', 'firstScared', 'firstEmber', 'plantHit', 'firstStolen', 'ghostNoJack');
   if (state.nightsSeen > 2) known.push('firstSkeleton');
   if (state.discovered.length) known.push('firstHybrid');
   if (state.upgrades.length) known.push('canUpgrade');
@@ -309,6 +341,7 @@ if (saved) {
 if (saved?.view) cameraControl.setTurn(saved.view.turn || 0, hero.position);
 cameraControl.toggleCloseUp(saved?.view ? !!saved.view.closeUp : true); // новая игра — крупным планом
 if (Number.isFinite(saved?.daytime)) daytime.time = saved.daytime;
+jackHeld = !!saved?.jackHeld && canTakeJack(); // сохранили ночью, а загрузили на другое время — Джек на крюке
 cameraControl.centerOn(hero.position); // на телефоне сцена ближе — начинаем с героя
 refresh();
 
@@ -328,7 +361,7 @@ function refresh() {
 // Всё, что сохраняем (в браузер и в файл): огород, монеты, семена, где стоит герой, ракурс камеры
 function snapshot() {
   return { ...game.toSave(), jack: jack.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
-    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp }, daytime: daytime.time };
+    view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp }, daytime: daytime.time, jackHeld };
 }
 
 function save() {
@@ -339,10 +372,12 @@ function save() {
 
 // Перезапуск страницы сразу в игру, без стартового экрана (после «Новой игры» и загрузки файла)
 const SKIP_INTRO = 'ogorod2-skip-intro';
-function reloadIntoGame() {
+const PLAY_STORY = 'ogorod2-story'; // после «Новой игры» — вступление (lines.js → STORY)
+function reloadIntoGame(story = false) {
   restarting = true;
   try {
     sessionStorage.setItem(SKIP_INTRO, '1');
+    if (story) sessionStorage.setItem(PLAY_STORY, '1');
   } catch { /* не страшно: просто покажется стартовый экран */ }
   location.reload();
 }
@@ -355,7 +390,7 @@ function ripenAll() {
 
 function restart() {
   clearSave();
-  reloadIntoGame();
+  reloadIntoGame(true);
 }
 
 // ---------- Меню и стартовый экран ----------
@@ -395,6 +430,8 @@ function actionCell() {
 const input = createInput(renderer.domElement, camera, {
   // Клик по клетке: идём на неё и действуем. К корзинке — встаём рядом лицом к ней.
   onCellClick(c) {
+    if (intro.active) return;
+    if (c.jack) return walkToHook();
     const toBasket = isBasket(c);
     const from = worldToCell(hero.position);
     const path = toBasket ? findPathToNeighbor(from, c) : findPathTo(from, c);
@@ -404,6 +441,7 @@ const input = createInput(renderer.domElement, camera, {
     hero.walkPath(points, toBasket ? cellToWorld(c.x, c.z) : null, () => game.useTool(c, heroFacing()));
   },
   onAction() {
+    if (nearHook()) return useHook();
     const c = actionCell();
     if (c) game.useTool(c, heroFacing());
   },
@@ -414,18 +452,60 @@ const input = createInput(renderer.domElement, camera, {
     if (n === 4) toggleShop();
     else if (TOOLS[n - 1]) selectTool(TOOLS[n - 1].id);
   },
-}, [{ object: basket, cell: BASKET_CELL }]);
+}, [{ object: basket, cell: BASKET_CELL }, { object: jackHook.object, cell: { ...worldToCell(new THREE.Vector3(JACK.hook.x, 0, world.bounds.min)), jack: true } }]);
+
+// Клик по Джеку на крюке: дойти по дорожке до двери и взять его
+function walkToHook() {
+  const stand = new THREE.Vector3(JACK.hook.x, 0, world.bounds.min); // у самой стены — ближе дорожка не пускает
+  const path = findPathTo(worldToCell(hero.position), worldToCell(stand));
+  if (!path) return;
+  const points = path.map((p) => cellToWorld(p.x, p.z));
+  points.shift();
+  points.push(stand);
+  hero.walkPath(points, jackHook.position.clone().setY(0), useHook);
+}
 
 // Стартовый экран при заходе на сайт (кроме перезапуска после «Новой игры» и загрузки файла)
 let skipIntro = false;
+let playStory = false;
 try {
   skipIntro = sessionStorage.getItem(SKIP_INTRO) === '1';
+  playStory = sessionStorage.getItem(PLAY_STORY) === '1';
   sessionStorage.removeItem(SKIP_INTRO);
+  sessionStorage.removeItem(PLAY_STORY);
 } catch { /* нет доступа — показываем стартовый экран */ }
+
+// ---------- Вступление новой игры: остров, дверь, Джек просыпается ----------
+const STORY_SHOTS = {
+  island: { at: new THREE.Vector3(0, 0, -1), size: 17 },
+  door: { at: new THREE.Vector3(JACK.hook.x + 0.3, 0.8, JACK.hook.z + 0.4), size: 4.5 },
+  jack: { at: new THREE.Vector3(JACK.hook.x, JACK.hook.y + 0.15, JACK.hook.z), size: 2.2 },
+};
+const intro = createIntro({
+  onShot(id, instant) {
+    const shot = STORY_SHOTS[id];
+    cameraControl.shot(shot.at, shot.size, instant);
+    if (id === 'jack') {
+      jackHook.wake(999); // проснулся и горит, пока говорит
+      sound.emberPicked();
+    }
+  },
+  onType: () => sound.typeKey(),
+  onDone() {
+    jackHook.sleep();
+    jackHook.wake(2.5); // ещё чуть погорит и заснёт до вечера
+    cameraControl.shot(null);
+    input.enabled = true;
+  },
+});
 if (BENCH_SCENE) setupBenchScene(BENCH_SCENE);
-else if (!skipIntro) menu.showStart();
+else if (playStory && !saved) {
+  input.enabled = false;
+  intro.prepare();
+} else if (!skipIntro) menu.showStart();
 
 window.addEventListener('keydown', (e) => {
+  if (intro.active) return; // во вступлении клавиши — его (пробел — дальше, Esc — пропустить)
   if (e.code === 'Escape') {
     if (menu.isOpen) menu.close();
     else if (game.state.shopOpen) toggleShop(false);
@@ -590,6 +670,7 @@ async function prepareWorld() {
   showLoading(1);
   loadingBar.classList.add('done');
   menu.setReady();
+  if (intro.active) intro.start();
   stats?.start();
 }
 
@@ -603,13 +684,16 @@ let last = performance.now();
 const screenRight = new THREE.Vector3(); // «вправо» на экране — в сцене
 let daytimeFrame = 0;
 let shownLamps = -1;
-ui.setDaytime(daytime.phase());
+const daySectors = daytime.phases.map((p) => ({ id: p.id, share: p.seconds / daytime.total })); // части суток для циферблата
+const showDaytime = () => ui.setDaytime(daytime.phase(), daytime.fraction, daySectors);
+showDaytime();
 renderer.setAnimationLoop(frame);
 // Не больше 60 кадров в секунду (на экранах 120 Гц — каждый второй кадр пропускаем: вдвое меньше работы и батареи),
 // а в меню и на стартовом экране, где почти ничего не движется, — 30
 const FRAME_GAP = { play: 1000 / 60, menu: 1000 / 30 };
 function frame(now) {
   const quiet = menu.isOpen && !BENCH_SCENE;
+  const paused = menu.isOpen || intro.active; // время и ночь стоят: в меню, на стартовом экране и во вступлении
   if (now - last < (quiet ? FRAME_GAP.menu : FRAME_GAP.play) - 3) return; // −3 мс — запас на неровный шаг экрана
   if (++frameCount % 60 === 0) applySkyReflex(scene);
   const realDt = (now - last) / 1000; // настоящая длина кадра — для счётчика (рывки видно как есть)
@@ -623,21 +707,26 @@ function frame(now) {
   gardenView.update(Date.now(), dt, night.threat, spirits.positions(), screenRight.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize());
   decor.update(dt, now / 1000);
   weather.update(dt, decor.wind);
-  if (!menu.isOpen) { // время и ночные набеги идут только в игре (в меню и на стартовом экране — стоят)
+  if (!paused) { // время и ночные набеги идут только в игре (в меню, на стартовом экране и во вступлении — стоят)
     daytime.update(dt);
     if (weather.raining) game.rain(dt); // дождь мочит грядки
-    night.update(dt, cellCoords(hero.position)); // фонарь енота пугает духов рядом
-    hero.setLantern(hero.lanternLevel + ((night.active ? 1 : 0) - hero.lanternLevel) * Math.min(1, dt * 1.5)); // ночью фонарь разгорается
+    if (jackHeld && !canTakeJack()) returnJack(); // утро: Джек сам вернулся на крюк
+    night.update(dt, cellCoords(hero.position), jackHeld); // фонарь енота пугает духов рядом — если Джек у него
+    // Джек у енота: горит вечером и ночью (ночью — во всю силу); на крюке — у енота фонаря нет
+    const goal = jackHeld ? Math.max(night.active ? 1 : 0, dayNight.state.lamps * 0.7, 0.1) : 0;
+    hero.setLantern(hero.lanternLevel + (goal - hero.lanternLevel) * Math.min(1, dt * 1.5));
     spirits.update(dt, now / 1000);
     attacks.update(dt);
     embers.update(dt, now / 1000, hero.position, game.perks().emberPull ?? undefined);
   }
   popups.update(dt);
-  jack.update(dt, menu.isOpen || game.state.shopOpen || game.state.herbariumOpen || !!BENCH_SCENE); // в замере Джек молчит
-  if (!menu.isOpen && !BENCH_SCENE) watchForJack(dt);
+  intro.update(dt);
+  jack.setAwake(jackHeld || canTakeJack() || jackHook.awake);
+  jack.update(dt, paused || game.state.shopOpen || game.state.herbariumOpen || !!BENCH_SCENE); // в замере Джек молчит
+  if (!paused && !BENCH_SCENE) watchForJack(dt);
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: pipeline.raysOn ? dayNight.state.rays : 0, moonlight: dayNight.state.moonlight });
-  if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
+  if (++daytimeFrame % 30 === 0) showDaytime();
   const { lamps, night: nightDepth } = dayNight.state;
   if (Math.abs(lamps - shownLamps) > 0.005) { // фонари и окна загораются к вечеру, гаснут утром
     shownLamps = lamps;
@@ -660,6 +749,7 @@ function frame(now) {
     callTimer = CALL_EVERY;
     if (guide) effects.glint(cellToWorld(guide.x, guide.z), { spread: 0.3, count: 2, low: 0.05 });
     if (basketCalls) effects.glint(cellToWorld(BASKET_CELL.x, BASKET_CELL.z), { spread: 0.5, low: 0.15 });
+    if (!jackHeld && canTakeJack()) effects.glint(jackHook.position.clone().setY(JACK.hook.y - 0.1), { spread: 0.18, count: 2, low: 0 }); // Джек зовёт: возьми меня
   }
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), pollenPairs, visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);
@@ -672,6 +762,12 @@ function frame(now) {
     dark: lamps, // вечер и ночь: сверчки; ночь: сова и тихая музыка; утро и день: птицы
     night: nightDepth,
   });
+  // Джек на крюке — виден, когда фонарь у енота погас (утром: сначала гаснет на поясе, потом появляется у двери)
+  const onHook = !jackHeld && hero.lanternLevel < 0.05;
+  if (onHook && !hookShown) effects.sparkle(jackHook.position.clone().setY(JACK.hook.y));
+  hookShown = onHook;
+  const flare = jackHook.update(dt, { visible: onHook, lamps });
+  lanterns.setDoor(onHook ? 1 : 0, onHook ? flare : 0);
   lanterns.update(now / 1000, lamps, [hero.position, ...spirits.positions()]);
 
   placeOn(hoverFrame, input.hoverCell);

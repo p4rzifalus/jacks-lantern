@@ -130,14 +130,18 @@ export function createScene(container) {
 
   const breath = new THREE.Vector2(); // «дыхание» камеры — мелкий сдвиг поверх основного положения
   let debugView = null;               // только для разработки: крупный план (см. cameraControl.closeUp)
+  // Вступление новой игры: камера сама переезжает от кадра к кадру (см. cameraControl.shot).
+  // { x, y, scale } — где сейчас, to — куда едет (null — обратно к обычному виду, потом story = null)
+  let story = null;
 
   function applyView() {
     clampCenter();
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const scale = debugView ? debugView.scale : scaleNow();
-    const cx = (debugView ? debugView.x : view.center.x) + breath.x / zoom;
-    const cy = (debugView ? debugView.y : view.center.y) + breath.y / zoom;
+    const base = debugView || story || { x: view.center.x, y: view.center.y, scale: scaleNow() };
+    const scale = base.scale;
+    const cx = base.x + breath.x / zoom;
+    const cy = base.y + breath.y / zoom;
     const halfW = w / 2 / scale;
     const top = cy + freeHeight() / 2 / scale;
     Object.assign(camera, {
@@ -236,8 +240,32 @@ export function createScene(container) {
         if (Math.abs(dx) > halfW) view.center.x += (dx - Math.sign(dx) * halfW) * k;
         if (Math.abs(dy) > halfH) view.center.y += (dy - Math.sign(dy) * halfH) * k;
       }
+      if (story) { // вступление: плавно едем к кадру (масштаб — тоже плавно, «в разах», а не в точках)
+        const to = story.to || { x: view.center.x, y: view.center.y, scale: scaleNow() };
+        const k = 1 - Math.exp(-dt * CAMERA.storySpeed * 2);
+        story.x += (to.x - story.x) * k;
+        story.y += (to.y - story.y) * k;
+        story.scale *= Math.pow(to.scale / story.scale, k);
+        const arrived = Math.abs(to.x - story.x) + Math.abs(to.y - story.y) < 0.02 && Math.abs(to.scale / story.scale - 1) < 0.01;
+        if (!story.to && arrived) story = null;
+      }
       applyView();
     },
+
+    // Кадр вступления: камера едет к точке сцены; size — сколько единиц сцены помещается по короткой стороне экрана.
+    // instant — сразу, без переезда. Без точки — вернуться к обычному виду
+    shot(worldPos, size = 6, instant = false) {
+      if (!worldPos) {
+        if (story) story.to = null;
+        return;
+      }
+      const p = toView(worldPos);
+      const to = { x: p.x, y: p.y, scale: Math.min(window.innerWidth, window.innerHeight) / size };
+      if (instant || !story) story = instant ? { ...to } : { x: view.center.x, y: view.center.y, scale: scaleNow() };
+      story.to = to;
+      applyView();
+    },
+    get inStory() { return !!story; },
 
     // Повернуть мир на 90°: +1 — по часовой стрелке, −1 — против. focusPos — что держать в центре (герой)
     rotate(step, focusPos) {
@@ -332,11 +360,10 @@ function createHouse(x, z) {
   awning.rotation.x = 0.3;
   house.add(awning);
 
-  // Фонарик у двери — светится
-  house.add(box(0.04, 0.2, 0.12, COLORS.houseTrim, -0.98, 0.95, front + 0.06));
-  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.12), glowMaterial(COLORS.lamp, 1, { lamp: true }));
-  lamp.position.set(-0.98, 0.95, front + 0.16);
-  house.add(lamp);
+  // Крюк у двери: здесь днём спит фонарь Джек (его спрайт и свет — world/jack-hook.js)
+  house.add(box(0.04, 0.2, 0.12, COLORS.houseTrim, -1.2, 0.95, front + 0.06));
+  house.add(box(0.03, 0.03, 0.16, COLORS.houseTrim, -1.2, 1.1, front + 0.13));
+  house.add(box(0.025, 0.05, 0.025, COLORS.houseTrim, -1.2, 1.05, front + 0.18));
 
   // Окно спереди: рама, переплёт крестом, ставни, ящик с цветами
   const windowWithFrame = (px, py, pz, alongX) => {

@@ -1,379 +1,6 @@
 // Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, гербарий.
 import { plural, formatTime } from './text.js';
-
-// Пиксельные значки 12×12: «#» — закрашенный пиксель, «.» — пусто
-const PIXEL_ICONS = {
-  seeds: [
-    '............',
-    '.##......##.',
-    '.###....###.',
-    '..###..###..',
-    '...##..##...',
-    '....####....',
-    '.....##.....',
-    '.....##.....',
-    '.....##.....',
-    '..########..',
-    '.##########.',
-    '............',
-  ],
-  water: [
-    '............',
-    '...####.....',
-    '..#....#....',
-    '..#....#...#',
-    '.########.##',
-    '.#########..',
-    '.########...',
-    '.########...',
-    '.########...',
-    '.########...',
-    '..######....',
-    '............',
-  ],
-  basket: [
-    '............',
-    '....####....',
-    '...#....#...',
-    '..#......#..',
-    '.#........#.',
-    '############',
-    '############',
-    '.#.##.##.#..',
-    '.##########.',
-    '.#.##.##.##.',
-    '..########..',
-    '............',
-  ],
-  shop: [
-    '............',
-    '.##########.',
-    '############',
-    '#.##.##.##.#',
-    '.#..#..#..#.',
-    '.#........#.',
-    '.#.###.##.#.',
-    '.#.#.#.##.#.',
-    '.#.#.#....#.',
-    '.#.#.#....#.',
-    '############',
-    '............',
-  ],
-  // меню: три полоски
-  menu: [
-    '............',
-    '............',
-    '.##########.',
-    '.##########.',
-    '............',
-    '.##########.',
-    '.##########.',
-    '............',
-    '.##########.',
-    '.##########.',
-    '............',
-    '............',
-  ],
-  // время суток: солнце (день), половинка солнца над горизонтом (утро и вечер), месяц (ночь)
-  sun: [
-    '.....##.....',
-    '.#...##...#.',
-    '..#......#..',
-    '....####....',
-    '...######...',
-    '##.######.##',
-    '##.######.##',
-    '...######...',
-    '....####....',
-    '..#......#..',
-    '.#...##...#.',
-    '.....##.....',
-  ],
-  sunrise: [
-    '............',
-    '............',
-    '.....##.....',
-    '.#...##...#.',
-    '..#......#..',
-    '....####....',
-    '...######...',
-    '.#.######.#.',
-    '............',
-    '############',
-    '............',
-    '..########..',
-  ],
-  // значки пузыря мысли над енотом и всплывающих чисел (см. popups.js)
-  drop: [
-    '............',
-    '.....##.....',
-    '.....##.....',
-    '....####....',
-    '....####....',
-    '...######...',
-    '..########..',
-    '..########..',
-    '..########..',
-    '...######...',
-    '....####....',
-    '............',
-  ],
-  dropEmpty: [
-    '............',
-    '.....##.....',
-    '.....##.....',
-    '....#..#....',
-    '....#..#....',
-    '...#....#...',
-    '..#......#..',
-    '..#......#..',
-    '..#......#..',
-    '...#....#...',
-    '....####....',
-    '............',
-  ],
-  clock: [
-    '............',
-    '...######...',
-    '..#......#..',
-    '.#...#....#.',
-    '.#...#....#.',
-    '.#...#....#.',
-    '.#...####.#.',
-    '.#........#.',
-    '.#........#.',
-    '..#......#..',
-    '...######...',
-    '............',
-  ],
-  hole: [
-    '............',
-    '............',
-    '............',
-    '............',
-    '............',
-    '............',
-    '...######...',
-    '.##......##.',
-    '#..######..#',
-    '#..........#',
-    '.##########.',
-    '............',
-  ],
-  basketFull: [
-    '..##..##....',
-    '.####.###...',
-    '.####.####..',
-    '..##..###...',
-    '.#........#.',
-    '############',
-    '############',
-    '.#.##.##.#..',
-    '.##########.',
-    '.#.##.##.##.',
-    '..########..',
-    '............',
-  ],
-  bagEmpty: [
-    '............',
-    '............',
-    '....#..#....',
-    '.....##.....',
-    '....#..#....',
-    '...#....#...',
-    '..#......#..',
-    '..#......#..',
-    '..#......#..',
-    '..#......#..',
-    '...######...',
-    '............',
-  ],
-  coin: [
-    '............',
-    '....####....',
-    '..########..',
-    '.###....###.',
-    '.##.####.##.',
-    '.##.####.##.',
-    '.##.####.##.',
-    '.##.####.##.',
-    '.###....###.',
-    '..########..',
-    '....####....',
-    '............',
-  ],
-  // огонёк, мешочек семян и виды атаки растений (магазин и гербарий)
-  ember: [
-    '............',
-    '.....#......',
-    '.....##.....',
-    '....###.....',
-    '....####.#..',
-    '...#####.#..',
-    '..########..',
-    '..###..###..',
-    '..##....##..',
-    '..###..###..',
-    '...######...',
-    '............',
-  ],
-  bag: [
-    '............',
-    '....#..#....',
-    '.....##.....',
-    '....####....',
-    '...######...',
-    '..########..',
-    '.##########.',
-    '.##########.',
-    '.##########.',
-    '.##########.',
-    '..########..',
-    '............',
-  ],
-  whip: [
-    '............',
-    '..........#.',
-    '.........##.',
-    '........##..',
-    '.......##...',
-    '......##....',
-    '.....##.....',
-    '....##......',
-    '...##.......',
-    '..##........',
-    '.##.........',
-    '............',
-  ],
-  spark: [
-    '............',
-    '.....##.....',
-    '.....##.....',
-    '..#..##..#..',
-    '...######...',
-    '.##########.',
-    '.##########.',
-    '...######...',
-    '..#..##..#..',
-    '.....##.....',
-    '.....##.....',
-    '............',
-  ],
-  wall: [
-    '............',
-    '............',
-    '############',
-    '#..#...#...#',
-    '############',
-    '..#...#...#.',
-    '############',
-    '#...#...#..#',
-    '############',
-    '............',
-    '............',
-    '............',
-  ],
-  beam: [
-    '............',
-    '............',
-    '#...........',
-    '###.........',
-    '######......',
-    '############',
-    '############',
-    '######......',
-    '###.........',
-    '#...........',
-    '............',
-    '............',
-  ],
-  spores: [
-    '............',
-    '..#.....#...',
-    '......#.....',
-    '.#...#....#.',
-    '....###.....',
-    '...#####....',
-    '..#######...',
-    '....###...#.',
-    '.#..###.....',
-    '....###..#..',
-    '..#######...',
-    '............',
-  ],
-  // книга — гербарий
-  book: [
-    '............',
-    '.####..####.',
-    '#....##....#',
-    '#.##.##.##.#',
-    '#....##....#',
-    '#.##.##.##.#',
-    '#....##....#',
-    '#.##.##.##.#',
-    '#....##....#',
-    '.####..####.',
-    '.....##.....',
-    '............',
-  ],
-  moon: [
-    '............',
-    '....####....',
-    '...###......',
-    '..###.......',
-    '.####.......',
-    '.####.......',
-    '.####.......',
-    '.#####....#.',
-    '..######.##.',
-    '...#######..',
-    '....####....',
-    '............',
-  ],
-  // лупа — крупный план
-  zoom: [
-    '............',
-    '...####.....',
-    '..#....#....',
-    '.#..##..#...',
-    '.#.####.#...',
-    '.#.####.#...',
-    '.#..##..#...',
-    '..#....#....',
-    '...####.#...',
-    '........##..',
-    '.........##.',
-    '..........##',
-  ],
-  // круговая стрелка по часовой — повернуть мир вправо
-  rotateRight: [
-    '............',
-    '....####....',
-    '..##....#...',
-    '.#.......#..',
-    '.#.....#####',
-    '.#......###.',
-    '.#.......#..',
-    '.#..........',
-    '..#.........',
-    '...##.......',
-    '.....###....',
-    '............',
-  ],
-};
-// против часовой — то же зеркально
-PIXEL_ICONS.rotateLeft = PIXEL_ICONS.rotateRight.map((row) => [...row].reverse().join(''));
-
-// Рисуем значок квадратиками без сглаживания, цвет берётся у кнопки
-export function pixelIcon(name) {
-  const rects = [];
-  PIXEL_ICONS[name].forEach((row, y) => {
-    [...row].forEach((ch, x) => {
-      if (ch === '#') rects.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
-    });
-  });
-  return `<svg class="pixel-icon" viewBox="0 0 12 12" shape-rendering="crispEdges">${rects.join('')}</svg>`;
-}
+import { pixelIcon, drawDayDial } from './icons.js';
 
 // Инструменты (клавиши 1–3). Магазин — клавиша 4, это не инструмент, а окно.
 export const TOOLS = [
@@ -462,18 +89,18 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   document.body.appendChild(coinsBox);
 
   // Время суток под монетами: значок, название и полоска — сколько осталось до следующей части
-  const DAYTIME_ICONS = { morning: 'sunrise', day: 'sun', evening: 'sunrise', night: 'moon' };
-  const daytimeBox = el('div', 'daytime', '<span class="daytime-icon"></span><span class="daytime-bar"><i></i></span>');
-  const daytimeIcon = daytimeBox.querySelector('.daytime-icon');
-  const daytimeFill = daytimeBox.querySelector('.daytime-bar i');
+  // Время суток — циферблат: цветные части суток и стрелка, которая по ним идёт
+  const daytimeBox = el('div', 'daytime', '<canvas class="daytime-dial"></canvas>');
+  const daytimeDial = daytimeBox.querySelector('canvas');
   let shownPhase = null;
+  let shownHand = -1;
   document.body.appendChild(daytimeBox);
 
   // Магазин: две вкладки — семена за монеты и дерево улучшений за огоньки
   let shopTab = 'coins';
   let lastView = null;
   const shop = el('div', 'shop-backdrop');
-  shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title flourished">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
+  shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title flourished">Магазин</span><button class="shop-close" aria-label="Закрыть">${pixelIcon('close')}</button></div>
     <div class="shop-tabs"><button data-tab="coins" title="семена за монеты">${pixelIcon('coin')}<span class="tab-name">Семена</span></button><button data-tab="embers" title="улучшения за огоньки">${pixelIcon('ember')}<span class="tab-name">Улучшения</span></button></div>
     <div class="shop-list"></div></div>`;
   const shopList = shop.querySelector('.shop-list');
@@ -531,7 +158,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       const state = step.owned ? 'owned' : step.available ? 'available' : 'locked';
       const price = `${step.price}${pixelIcon('ember')}`;
       const action = step.owned
-        ? '<span class="tree-done">✓</span>'
+        ? `<span class="tree-done">${pixelIcon('check')}</span>`
         : step.available
           ? `<button data-upgrade="${step.id}" ${view.embers < step.price ? 'disabled' : ''}>${price}</button>`
           : `<span class="tree-price">${price}</span>`;
@@ -546,7 +173,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
 
   // Гербарий: карточки всех растений; неоткрытые — силуэт и «???»
   const herbarium = el('div', 'shop-backdrop herbarium-backdrop');
-  herbarium.innerHTML = '<div class="shop"><div class="shop-head"><span class="title flourished">Гербарий</span><span class="herb-count"></span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="herb-grid"></div></div>';
+  herbarium.innerHTML = `<div class="shop"><div class="shop-head"><span class="title flourished">Гербарий</span><span class="herb-count"></span><button class="shop-close" aria-label="Закрыть">${pixelIcon('close')}</button></div><div class="herb-grid"></div></div>`;
   const herbGrid = herbarium.querySelector('.herb-grid');
   const herbCount = herbarium.querySelector('.herb-count');
   herbarium.addEventListener('click', (e) => {
@@ -582,7 +209,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
 
       seedRow.classList.toggle('visible', view.tool === 'seeds');
       seedRow.innerHTML = view.seedOptions
-        .map((s) => `<button data-seed="${s.type}" class="${s.type === view.selectedSeed ? 'selected' : ''}">${s.name} <b>${s.count}</b></button>`)
+        .map((s) => `<button data-seed="${s.type}" class="${s.type === view.selectedSeed ? 'selected' : ''}" title="${s.name}" aria-label="${s.name}">${plantPicture(s.type)}<b>${s.count}</b></button>`)
         .join('');
 
       herbariumButton.classList.toggle('on', view.herbariumOpen);
@@ -593,16 +220,19 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       if (view.shopOpen) renderShop(view); // закрытый магазин не перерисовываем — соберётся заново при открытии
     },
 
-    // phase — { id, name, progress } из daytime.js
-    setDaytime(phase) {
+    // phase — { id, name, progress } из daytime.js, fraction — доля суток (0..1), sectors — [{ id, share }] части суток
+    setDaytime(phase, fraction, sectors) {
       if (phase.id !== shownPhase) {
         shownPhase = phase.id;
-        daytimeIcon.innerHTML = pixelIcon(DAYTIME_ICONS[phase.id] || 'sun');
         daytimeBox.title = phase.name; // слово — только в подсказке при наведении
         daytimeBox.dataset.phase = phase.id;
         document.body.dataset.phase = phase.id; // ночью бумага интерфейса чуть темнее (ui.css)
       }
-      daytimeFill.style.width = `${Math.round((1 - phase.progress) * 100)}%`;
+      const hand = Math.round(fraction * 96); // перерисовываем, когда стрелка заметно сдвинулась
+      if (hand !== shownHand) {
+        shownHand = hand;
+        drawDayDial(daytimeDial, fraction, sectors);
+      }
     },
 
     // Магазин зовёт несколько секунд: мерцает кнопка

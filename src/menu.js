@@ -2,6 +2,7 @@
 // продолжить / новая игра / сохранить в файл / загрузить из файла, звук и музыка.
 import { canOverwrite, saveToFile, openSaveFile, lastFileInfo, hasOwnFile } from './save-file.js';
 import { escapeHtml } from './text.js';
+import { pixelIcon } from './icons.js';
 
 // «28 сентября, 21:15»
 function formatDate(time) {
@@ -158,7 +159,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
         <div class="menu-status">${escapeHtml(statusText)}</div>`;
     } else if (name === 'menu') {
       card.innerHTML = `
-        <div class="menu-head"><span class="title flourished">Меню</span><button class="menu-close" data-act="close" aria-label="Закрыть">✕</button></div>
+        <div class="menu-head"><span class="title flourished">Меню</span><button class="menu-close" data-act="close" aria-label="Закрыть">${pixelIcon('close')}</button></div>
         <div class="menu-section">
           ${soundRow('effects', 'Звуки')}
           ${soundRow('music', 'Музыка')}

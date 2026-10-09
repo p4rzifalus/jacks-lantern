@@ -1,6 +1,34 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "ferma-2", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--host", "--port", "5174", "--strictPort"], "port": 5174 }
+    {
+      "name": "ferma-2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--host",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "ferma-2-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5185",
+        "--strictPort",
+        "--config",
+        "/private/tmp/claude-501/-Users-p4rzifal-Claude-Projects-osennyaya-ferma-2/bb99a499-fc3c-42b4-a3c3-438721e7d4e1/scratchpad/vite.nohmr.config.mjs"
+      ],
+      "port": 5185
+    }
   ]
 }
