@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "art": "node scripts/art.mjs"
+    "art": "node scripts/art.mjs",
+    "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",
