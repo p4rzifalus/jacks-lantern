@@ -272,7 +272,7 @@ body.intro .menu-backdrop:has(.menu[data-screen='start']) {
   background: linear-gradient(rgba(20, 14, 10, 0.1), rgba(20, 14, 10, 0.35)), var(--ui-cover, none) center 40% / cover no-repeat, #2a1f1a;
 }
 body.intro .menu-backdrop:has(.menu[data-screen='start']) .start-logo {
-  display: block; width: min(86vw, 440px); aspect-ratio: 640 / 317; flex: none;
+  display: block; width: min(86vw, 440px); aspect-ratio: 934 / 574; flex: none;
   background: var(--ui-logo) center / contain no-repeat; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
 }
 .menu[data-screen='start'] .menu-title { display: none; } /* название — на логотипе */
