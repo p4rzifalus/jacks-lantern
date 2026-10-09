@@ -86,21 +86,30 @@ function discovered(cell, { type, first }) {
   if (first) setTimeout(() => menu.showDiscovery(discoveryCard(type)), 900);
 }
 
+// Картинка спелого растения из листа растений (для окна открытия и гербария), один раз на растение
+const plantImages = {};
+function plantImage(type) {
+  if (!plantImages[type]) {
+    const { frameW, frameH } = PLANT_FRAME;
+    const canvas = document.createElement('canvas');
+    canvas.width = frameW;
+    canvas.height = frameH;
+    canvas.getContext('2d').drawImage(getSheets().plants.material.map.image, 3 * frameW, PLANT_ORDER.indexOf(type) * frameH, frameW, frameH, 0, 0, frameW, frameH);
+    plantImages[type] = canvas.toDataURL();
+  }
+  return plantImages[type];
+}
+
 // Окно открытия: картинка спелого растения (из листа растений), от кого выведено, что умеет
 function discoveryCard(type) {
   const p = PLANTS[type];
-  const { frameW, frameH } = PLANT_FRAME;
-  const canvas = document.createElement('canvas');
-  canvas.width = frameW;
-  canvas.height = frameH;
-  canvas.getContext('2d').drawImage(getSheets().plants.material.map.image, 3 * frameW, PLANT_ORDER.indexOf(type) * frameH, frameW, frameH, 0, 0, frameW, frameH);
   const [a, b] = p.hybrid.map((t) => PLANTS[t].name.toLowerCase());
   return {
     name: p.name,
-    image: canvas.toDataURL(),
+    image: plantImage(type),
     rows: [
       ['Выведено из', `${a} и ${b}`],
-      ['Растёт', formatTime((p.stageSeconds * RIPE) / GROWTH_SPEED)],
+      ['Растёт', formatTime((p.stageSeconds * RIPE) / (GROWTH_SPEED * game.garden.growth))],
       ['Урожай', `${p.sellPrice} мон.`],
       ['Ночью', p.defense.role],
     ],
@@ -190,8 +199,16 @@ function selectTool(id) {
 }
 function toggleShop(open = !game.state.shopOpen) {
   if (open !== game.state.shopOpen) sound.shop(open);
+  if (open) game.toggleHerbarium(false);
   game.toggleShop(open);
 }
+function toggleHerbarium(open = !game.state.herbariumOpen) {
+  if (open !== game.state.herbariumOpen) sound.shop(open);
+  if (open) game.toggleShop(false);
+  game.toggleHerbarium(open);
+}
+// Куда смотрит енот — по клеткам (для широкой лейки: ряд из 3 клеток — поперёк взгляда)
+const heroFacing = () => ({ x: Math.sin(hero.heading), z: Math.cos(hero.heading) });
 
 // Камера: крупный план героя и поворот мира по 90°
 function toggleCloseUp(on) {
@@ -214,10 +231,12 @@ const ui = createUI({
   onBuy(type, count) {
     if (game.buySeeds(type, count)) sound.buy();
   },
-  onUpgradeBasket() {
-    if (game.upgradeBasket()) sound.buy();
+  onUpgrade(id) {
+    if (game.buyUpgrade(id)) sound.buy();
   },
   onShopToggle: toggleShop,
+  onHerbariumToggle: toggleHerbarium,
+  plantImage,
   onCloseUp: toggleCloseUp,
   onRotate: rotateWorld,
   onMenu: () => menu.toggle(),
@@ -246,6 +265,7 @@ function refresh() {
   const { tool, selectedSeed, carried } = game.state;
   hero.setHeld({ tool, seed: selectedSeed, carried: carried.map((item) => item.type) });
   basket.userData.fill.visible = game.hasHarvest();
+  hero.setLanternReach(game.perks().lanternRadius);
   ui.render({ ...game.view(), closeUp: cameraControl.isCloseUp });
   save();
 }
@@ -327,11 +347,11 @@ const input = createInput(renderer.domElement, camera, {
     if (!path) return;
     const points = path.map((p) => cellToWorld(p.x, p.z));
     if (points.length > 1) points.shift(); // первая точка — клетка, где герой уже стоит
-    hero.walkPath(points, toBasket ? cellToWorld(c.x, c.z) : null, () => game.useTool(c));
+    hero.walkPath(points, toBasket ? cellToWorld(c.x, c.z) : null, () => game.useTool(c, heroFacing()));
   },
   onAction() {
     const c = actionCell();
-    if (c) game.useTool(c);
+    if (c) game.useTool(c, heroFacing());
   },
   onPan(dx, dy) {
     cameraControl.panBy(dx, dy);
@@ -354,12 +374,14 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     if (menu.isOpen) menu.close();
     else if (game.state.shopOpen) toggleShop(false);
+    else if (game.state.herbariumOpen) toggleHerbarium(false);
     else menu.open();
   }
   if (menu.isOpen || e.repeat) return; // в меню клавиши игры не работают; зажатая клавиша срабатывает один раз
   if (e.code === 'KeyM') sound.engine.toggle('music');   // M — музыка
   if (e.code === 'KeyN') sound.engine.toggle('effects'); // N — звуки
   if (e.code === 'KeyZ') toggleCloseUp();                 // Z — крупный план
+  if (e.code === 'KeyH') toggleHerbarium();               // H — гербарий
   if (e.code === 'KeyQ') rotateWorld(-1);                 // Q / E — повернуть мир
   if (e.code === 'KeyE') rotateWorld(1);
 });
@@ -459,7 +481,7 @@ function frame(now) {
     hero.setLantern(hero.lanternLevel + ((night.active ? 1 : 0) - hero.lanternLevel) * Math.min(1, dt * 1.5)); // ночью фонарь разгорается
     spirits.update(dt, now / 1000);
     attacks.update(dt);
-    embers.update(dt, now / 1000, hero.position);
+    embers.update(dt, now / 1000, hero.position, game.perks().emberPull ?? undefined);
   }
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });

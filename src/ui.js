@@ -103,6 +103,21 @@ const PIXEL_ICONS = {
     '............',
     '..########..',
   ],
+  // книга — гербарий
+  book: [
+    '............',
+    '.####..####.',
+    '#....##....#',
+    '#.##.##.##.#',
+    '#....##....#',
+    '#.##.##.##.#',
+    '#....##....#',
+    '#.##.##.##.#',
+    '#....##....#',
+    '.####..####.',
+    '.....##.....',
+    '............',
+  ],
   moon: [
     '............',
     '....####....',
@@ -183,10 +198,10 @@ function toolButton(key, icon, name) {
     <span class="name title">${name}</span>`);
 }
 
-// «2 места», «5 мест»
-const places = (n) => plural(n, ['место', 'места', 'мест']);
+// «1 огонёк», «5 огоньков»
+const embersOf = (n) => plural(n, ['огонёк', 'огонька', 'огоньков']);
 
-export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, onShopToggle, onCloseUp, onRotate, onMenu }) {
+export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopToggle, onHerbariumToggle, plantImage, onCloseUp, onRotate, onMenu }) {
   // Меню в левом верхнем углу (Esc): сохранение, новая игра, звук и музыка
   const menuBar = el('div', 'corner-bar');
   const menuButton = el('button', '', `${pixelIcon('menu')}<span class="key">Esc</span>`);
@@ -194,6 +209,12 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, o
   menuButton.setAttribute('aria-label', 'Меню');
   menuButton.addEventListener('click', () => onMenu());
   menuBar.appendChild(menuButton);
+  // Гербарий (H) — рядом с меню
+  const herbariumButton = el('button', '', `${pixelIcon('book')}<span class="key">H</span>`);
+  herbariumButton.title = 'Гербарий';
+  herbariumButton.setAttribute('aria-label', 'Гербарий');
+  herbariumButton.addEventListener('click', () => onHerbariumToggle());
+  menuBar.appendChild(herbariumButton);
   document.body.appendChild(menuBar);
 
   // Кнопки камеры под меню: повернуть мир влево (Q), крупный план (Z), повернуть вправо (E)
@@ -248,18 +269,89 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, o
   let shownPhase = null;
   document.body.appendChild(daytimeBox);
 
-  // Магазин
+  // Магазин: две вкладки — семена за монеты и дерево улучшений за огоньки
+  let shopTab = 'coins';
+  let lastView = null;
   const shop = el('div', 'shop-backdrop');
-  shop.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="shop-list"></div></div>';
+  shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
+    <div class="shop-tabs"><button data-tab="coins" class="title">За монеты</button><button data-tab="embers" class="title">За огоньки</button></div>
+    <div class="shop-list"></div></div>`;
   const shopList = shop.querySelector('.shop-list');
+  const tabButtons = shop.querySelectorAll('.shop-tabs button');
   shop.addEventListener('click', (e) => {
     if (e.target === shop || e.target.closest('.shop-close')) onShopToggle(false);
+    const tab = e.target.closest('button[data-tab]');
+    if (tab && tab.dataset.tab !== shopTab) {
+      shopTab = tab.dataset.tab;
+      if (lastView) renderShop(lastView);
+    }
     const buy = e.target.closest('button[data-buy]');
     if (buy && !buy.disabled) onBuy(buy.dataset.buy, Number(buy.dataset.count));
     const upgrade = e.target.closest('button[data-upgrade]');
-    if (upgrade && !upgrade.disabled) onUpgradeBasket();
+    if (upgrade && !upgrade.disabled) onUpgrade(upgrade.dataset.upgrade);
   });
   document.body.appendChild(shop);
+
+  // Семена за монеты
+  function seedRows(view) {
+    return view.shop.map((row) => {
+      if (!row.unlocked) {
+        return `<div class="shop-row locked"><div class="shop-name"><span class="title">???</span></div><div class="shop-info">Откроется: ${row.condition}</div></div>`;
+      }
+      const info = `рост ${formatTime(row.growSeconds)} · урожай ${row.sellPrice} мон.`;
+      const d = row.defense;
+      const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${plural(d.nights, ['ночь', 'ночи', 'ночей'])}, потом засыхает · после ночи на страже урожай ${row.wiltedPrice} мон.</div>`;
+      if (row.seedPrice === 0) {
+        return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
+      }
+      const buyButton = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} за ${row.seedPrice * n}</button>`;
+      return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
+    }).join('');
+  }
+
+  // Дерево улучшений: ветка — цепочка шагов сверху вниз; куплено — светится, следующий — с кнопкой, дальше — тускло
+  function upgradeRows(view) {
+    const head = `<div class="shop-info tree-note">Огоньки остаются от прогнанных ночью духов. У тебя: <b>${view.embers}</b></div>`;
+    return head + view.upgrades.map((branch) => `<div class="shop-section title">${branch.name}</div><div class="tree">${branch.steps.map((step) => {
+      const state = step.owned ? 'owned' : step.available ? 'available' : 'locked';
+      const action = step.owned
+        ? '<span class="tree-done">есть</span>'
+        : step.available
+          ? `<button data-upgrade="${step.id}" ${view.embers < step.price ? 'disabled' : ''}>за ${embersOf(step.price)}</button>`
+          : `<span class="tree-price">${embersOf(step.price)}</span>`;
+      return `<div class="tree-step ${state}"><div class="tree-text"><span class="title">${step.name}</span><span class="shop-info">${step.text}</span></div><div class="shop-buy">${action}</div></div>`;
+    }).join('')}</div>`).join('');
+  }
+
+  function renderShop(view) {
+    for (const b of tabButtons) b.classList.toggle('selected', b.dataset.tab === shopTab);
+    shopList.innerHTML = shopTab === 'coins' ? '<div class="shop-section title">Семена</div>' + seedRows(view) : upgradeRows(view);
+  }
+
+  // Гербарий: карточки всех растений; неоткрытые — силуэт и «???»
+  const herbarium = el('div', 'shop-backdrop herbarium-backdrop');
+  herbarium.innerHTML = '<div class="shop"><div class="shop-head"><span class="title">Гербарий</span><span class="herb-count"></span><button class="shop-close" aria-label="Закрыть">✕</button></div><div class="herb-grid"></div></div>';
+  const herbGrid = herbarium.querySelector('.herb-grid');
+  const herbCount = herbarium.querySelector('.herb-count');
+  herbarium.addEventListener('click', (e) => {
+    if (e.target === herbarium || e.target.closest('.shop-close')) onHerbariumToggle(false);
+  });
+  document.body.appendChild(herbarium);
+
+  function renderHerbarium(view) {
+    const open = view.herbarium.filter((p) => p.open).length;
+    herbCount.textContent = `открыто ${open} из ${view.herbarium.length}`;
+    herbGrid.innerHTML = view.herbarium.map((p) => {
+      const img = `<img src="${plantImage(p.type)}" alt="">`;
+      if (!p.open) return `<div class="herb-card locked">${img}<div class="title">???</div></div>`;
+      const rows = [
+        p.parents && `выведено из: ${p.parents.join(' и ')}`,
+        `рост ${formatTime(p.growSeconds)} · урожай ${p.sellPrice} мон.`,
+        `собрано: ${p.harvested}`,
+      ].filter(Boolean).map((r) => `<div class="shop-info">${r}</div>`).join('');
+      return `<div class="herb-card">${img}<div class="title">${p.name}</div>${rows}<div class="shop-info guard">${p.role}</div></div>`;
+    }).join('');
+  }
 
   const hintBox = el('div', 'hint');
   document.body.appendChild(hintBox);
@@ -281,25 +373,12 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgradeBasket, o
         .map((s) => `<button data-seed="${s.type}" class="${s.type === view.selectedSeed ? 'selected' : ''}">${s.name} <b>${s.count}</b></button>`)
         .join('');
 
+      herbariumButton.classList.toggle('on', view.herbariumOpen);
+      herbarium.classList.toggle('visible', view.herbariumOpen);
+      if (view.herbariumOpen) renderHerbarium(view);
+      lastView = view;
       shop.classList.toggle('visible', view.shopOpen);
-      if (!view.shopOpen) return; // закрытый магазин не перерисовываем — соберётся заново при открытии
-      const up = view.basketUpgrade;
-      const upgradeRow = up
-        ? `<div class="shop-row"><div class="shop-name"><span class="title">Корзинка побольше</span><span class="owned">сейчас: ${places(view.capacity)}</span></div><div class="shop-info">станет ${places(up.capacity)} — больше урожая за один поход к дому</div><div class="shop-buy"><button data-upgrade ${view.coins < up.price ? 'disabled' : ''}>улучшить за ${up.price}</button></div></div>`
-        : `<div class="shop-row"><div class="shop-name"><span class="title">Корзинка</span><span class="owned">${places(view.capacity)}</span></div><div class="shop-info">самая большая — улучшать больше некуда</div></div>`;
-      shopList.innerHTML = '<div class="shop-section title">Улучшения</div>' + upgradeRow + '<div class="shop-section title">Семена</div>' + view.shop.map((row) => {
-        if (!row.unlocked) {
-          return `<div class="shop-row locked"><div class="shop-name"><span class="title">???</span></div><div class="shop-info">Откроется: ${row.condition}</div></div>`;
-        }
-        const info = `рост ${formatTime(row.growSeconds)} · урожай ${row.sellPrice} мон.`;
-        const d = row.defense;
-        const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${plural(d.nights, ['ночь', 'ночи', 'ночей'])}, потом засыхает · после ночи на страже урожай ${row.wiltedPrice} мон.</div>`;
-        if (row.seedPrice === 0) {
-          return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
-        }
-        const buyButton = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} за ${row.seedPrice * n}</button>`;
-        return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
-      }).join('');
+      if (view.shopOpen) renderShop(view); // закрытый магазин не перерисовываем — соберётся заново при открытии
     },
 
     // phase — { id, name, progress } из daytime.js

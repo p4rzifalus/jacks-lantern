@@ -10,6 +10,8 @@ const dryMs = () => SOIL.dryMinutes * 60 * 1000;
 
 export class GardenState {
   constructor() {
+    this.growth = 1;      // во сколько раз быстрее растёт всё (улучшение «Тёплая земля»)
+    this.extraNights = 0; // на сколько ночей дольше стоят на страже (улучшение «Стойкие растения»)
     this.cells = [];
     for (let x = 0; x < GARDEN_SIZE; x++) {
       for (let z = 0; z < GARDEN_SIZE; z++) this.cells.push({ x, z, plant: null, plantedAt: null, wateredAt: null, nights: 0 });
@@ -43,7 +45,7 @@ export class GardenState {
     if (!cell.plant) return EMPTY;
     const from = this.growsFrom(cell);
     if (from === null) return 0;
-    const stageMs = (PLANTS[cell.plant].stageSeconds * 1000) / GROWTH_SPEED;
+    const stageMs = (PLANTS[cell.plant].stageSeconds * 1000) / (GROWTH_SPEED * this.growth);
     return Math.max(0, Math.min(RIPE, Math.floor((now - from) / stageMs))); // часы устройства могли отставать — не меньше 0
   }
 
@@ -51,7 +53,7 @@ export class GardenState {
   // Стоит на грядке, ночью не защищает и духам не нужно; собирается за полцены и даёт семена
   isDry(c, now = Date.now()) {
     const cell = this.cell(c);
-    return this.stage(c, now) === RIPE && cell.nights >= PLANTS[cell.plant].defense.nights;
+    return this.stage(c, now) === RIPE && cell.nights >= PLANTS[cell.plant].defense.nights + this.extraNights;
   }
 
   // Спелое и живое — стоит ночью на страже
@@ -79,7 +81,7 @@ export class GardenState {
   putBackRipe(c, type, nights = 0) {
     const cell = this.cell(c);
     if (cell.plant) return false;
-    const ripeMs = (PLANTS[type].stageSeconds * 1000 * RIPE) / GROWTH_SPEED;
+    const ripeMs = (PLANTS[type].stageSeconds * 1000 * RIPE) / (GROWTH_SPEED * this.growth);
     const at = Date.now() - ripeMs - 1000;
     Object.assign(cell, { plant: type, plantedAt: at, wateredAt: at, nights });
     return true;

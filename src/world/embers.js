@@ -32,7 +32,8 @@ export function createEmbers(scene, { onCollect }) {
       list.push({ sprite, phase: Math.random() * 10, flying: false, t: 0 });
     },
 
-    update(dt, time, heroPosition) {
+    // pullCells — с какого расстояния огоньки летят к еноту (улучшение «Зов огоньков»; нет — SPIRITS.emberPull)
+    update(dt, time, heroPosition, pullCells = SPIRITS.emberPull) {
       for (const e of [...list]) {
         const pos = e.sprite.object.position;
         e.sprite.setFrame(1 + (Math.floor(time * 8 + e.phase) % 4), SPIRIT.rows_.coin);
@@ -55,9 +56,9 @@ export function createEmbers(scene, { onCollect }) {
         if (d < SPIRITS.emberReach) {
           onCollect(pos.clone());
           remove(e);
-        } else if (d < SPIRITS.emberPull) {
+        } else if (d < pullCells) {
           // подлетает: у края — медленно, ближе к еноту — всё быстрее
-          const near = 1 - d / SPIRITS.emberPull;
+          const near = 1 - d / pullCells;
           const step = Math.min(d, SPIRITS.emberPullSpeed * (0.4 + 2 * near) * dt) * CELL_SIZE;
           pos.x += (dx / (d * CELL_SIZE)) * step;
           pos.z += (dz / (d * CELL_SIZE)) * step;

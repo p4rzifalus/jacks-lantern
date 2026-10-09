@@ -109,7 +109,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
   // Удар попал: убавить смелость
   function hit(spirit, power, from) {
     if (spirit.fled || spirit.courage <= 0) return;
-    spirit.courage -= power;
+    spirit.courage -= power * game.perks().attackPower; // улучшение «Сильные корни»
     spirit.hitBy = from;
     onHit?.(spirit, from);
   }
@@ -119,8 +119,9 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
   function lantern(dt, heroAt, targets) {
     for (const s of targets) s.lit = false;
     if (!heroAt) return;
+    const radius = LANTERN.radius * game.perks().lanternRadius; // улучшение «Яркий фонарь»
     for (const s of targets) {
-      if (dist(s.at, heroAt) > LANTERN.radius) continue;
+      if (dist(s.at, heroAt) > radius) continue;
       s.lit = true;
       s.courage -= LANTERN.power * (LANTERN.fear[s.kind] ?? 1) * dt;
       s.hitBy = null; // напугал фонарь, а не растение

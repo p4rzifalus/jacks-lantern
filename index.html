@@ -129,6 +129,39 @@
         flex: 1; height: 40px; font: inherit; font-size: 13px; border-radius: 10px; cursor: pointer;
         color: #2a1a0a; background: var(--amber); border: none; touch-action: manipulation;
       }
+      /* вкладки магазина: за монеты / за огоньки */
+      .shop-tabs { display: flex; gap: 8px; padding: 12px 18px 0; }
+      .shop-tabs button {
+        flex: 1; padding: 8px 0; font-size: 20px; color: var(--text-dim); cursor: pointer; touch-action: manipulation;
+        background: rgba(255, 255, 255, 0.04); border: 1px solid var(--edge); border-radius: 10px;
+      }
+      .shop-tabs button.selected { color: var(--amber); border-color: var(--amber); box-shadow: 0 0 14px var(--amber-soft); }
+      /* дерево улучшений: ветка — цепочка шагов, слева — линия, по которой «течёт» свет купленных */
+      .tree-note { padding: 12px 18px 0; }
+      .tree-note b { color: var(--amber); font-weight: normal; }
+      .tree { position: relative; margin: 6px 18px 4px 30px; }
+      .tree::before { content: ''; position: absolute; left: -12px; top: 18px; bottom: 18px; width: 2px; background: var(--edge); }
+      .tree-step { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+      .tree-step::before {
+        content: ''; position: absolute; left: -17px; top: 50%; width: 10px; height: 10px; margin-top: -6px;
+        border-radius: 50%; border: 1px solid var(--edge); background: var(--glass-strong);
+      }
+      .tree-step.owned::before { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 10px var(--amber); }
+      .tree-step.available::before { border-color: var(--amber); }
+      .tree-step.locked { opacity: 0.45; }
+      .tree-text { flex: 1; display: flex; flex-direction: column; }
+      .tree-text .title { font-size: 20px; color: var(--text); }
+      .tree-step.owned .title { color: var(--amber); }
+      .tree-step .shop-buy { margin-top: 0; }
+      .tree-done, .tree-price { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+      /* гербарий: сетка карточек; неоткрытые — тёмный силуэт */
+      .herb-count { flex: 1; margin-left: 12px; font-size: 13px; color: var(--text-dim); font-family: Menlo, Consolas, monospace; }
+      .herb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 14px 18px 18px; }
+      .herb-card { padding: 8px 10px 10px; border: 1px solid var(--edge); border-radius: 12px; background: rgba(255, 255, 255, 0.03); text-align: center; }
+      .herb-card img { width: 96px; height: 120px; image-rendering: pixelated; display: block; margin: -16px auto 0; } /* у рисунка пустой верх — поджимаем */
+      .herb-card .title { font-size: 20px; color: var(--text); margin-bottom: 4px; }
+      .herb-card.locked img { filter: brightness(0); opacity: 0.55; }
+      .herb-card.locked .title { color: var(--text-dim); }
       .shop-buy button:disabled { color: var(--text-dim); background: rgba(255, 255, 255, 0.06); cursor: default; }
 
       /* Монеты и подсказки */
@@ -166,7 +199,7 @@
       /* кнопки камеры — второй ряд под меню; включённая лупа светится, как выбранный инструмент */
       .view-bar { top: 72px; }
       .view-bar button { color: var(--text-dim); }
-      .view-bar button.on {
+      .view-bar button.on, .corner-bar button.on {
         color: var(--amber); background: var(--glass-strong); border-color: var(--amber);
         box-shadow: 0 0 18px var(--amber-soft), 0 6px 24px rgba(0, 0, 0, 0.35);
       }

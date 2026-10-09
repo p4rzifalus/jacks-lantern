@@ -138,6 +138,12 @@ export class Hero {
     });
   }
 
+  // Насколько далеко светит фонарь: scale — множитель к LANTERN.radius (улучшение «Яркий фонарь»)
+  setLanternReach(scale) {
+    this.ring.scale.setScalar(LANTERN.radius * CELL_SIZE * scale);
+    this.lanternLight.distance = LANTERN.radius * CELL_SIZE * 2.6 * scale;
+  }
+
   // Фонарь: level 0 — погашен (день), 1 — горит (ночь)
   setLantern(level) {
     this.lanternLevel = level;
