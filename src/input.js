@@ -85,16 +85,41 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
   };
 
   // Нажал и повёл — двигаем сцену. Нажал и отпустил на месте — это клик/тап по клетке.
+  // Два пальца — щипок: свёл — отдалить, развёл — приблизить; заодно двигает сцену вслед за пальцами
   const DRAG_THRESHOLD = 8; // на сколько точек сдвинуть палец, чтобы это считалось драгом
   let press = null;
+  const touches = new Map(); // пальцы на экране: id → { x, y }
+  let pinch = null;          // { dist, x, y } — идёт щипок: расстояние между пальцами и точка между ними
+  function pinchNow() {
+    const [a, b] = [...touches.values()];
+    return { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  document.addEventListener('gesturestart', (e) => e.preventDefault()); // Safari: щипок — игре, а не странице
 
   canvas.addEventListener('pointerdown', (e) => {
-    if (press) return; // второй палец не трогаем
+    if (e.pointerType === 'touch') touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) { // второй палец — щипок; первый палец уже не тап
+      pinch = pinchNow();
+      if (press) press.dragging = true;
+      input.hoverCell = null;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (press) return; // третий палец не трогаем
     press = { id: e.pointerId, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, dragging: false };
     canvas.setPointerCapture(e.pointerId);
   });
 
   canvas.addEventListener('pointermove', (e) => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) {
+      if (touches.size < 2) return;
+      const now = pinchNow();
+      handlers.onPan?.(now.x - pinch.x, now.y - pinch.y);
+      handlers.onPinch?.(now.dist / pinch.dist, now.x, now.y);
+      pinch = now;
+      return;
+    }
     if (press && e.pointerId === press.id) {
       if (!press.dragging && Math.hypot(e.clientX - press.startX, e.clientY - press.startY) > DRAG_THRESHOLD) {
         press.dragging = true;
@@ -110,7 +135,21 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
     input.hoverCell = cellAt(e);
   });
 
+  // палец убрали: щипок кончился; оставшийся палец продолжает двигать сцену с того места, где он сейчас
+  function liftFinger(id) {
+    touches.delete(id);
+    if (pinch && touches.size < 2) {
+      pinch = null;
+      const rest = press && touches.get(press.id);
+      if (rest) {
+        press.lastX = rest.x;
+        press.lastY = rest.y;
+      }
+    }
+  }
+
   canvas.addEventListener('pointerup', (e) => {
+    liftFinger(e.pointerId);
     if (!press || e.pointerId !== press.id) return;
     const wasDrag = press.dragging;
     press = null;
@@ -121,6 +160,7 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
   });
 
   canvas.addEventListener('pointercancel', (e) => {
+    liftFinger(e.pointerId);
     if (press && e.pointerId === press.id) press = null;
   });
   canvas.addEventListener('pointerleave', (e) => {

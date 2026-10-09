@@ -108,7 +108,8 @@ export function createScene(container) {
   // Крупный план: zoom плавно идёт от 1 к CAMERA.closeUpZoom и обратно
   let closeUp = false;
   let zoom = 1;
-  const scaleNow = () => view.scale * zoom;
+  let pinch = 1; // щипок двумя пальцами (телефон): своё приближение поверх обычного вида
+  const scaleNow = () => view.scale * zoom * pinch;
 
   // Поворот мира: turn — куда повернули (0…3), yaw — угол камеры сейчас (во время поворота — между точками)
   let turn = 0;
@@ -156,11 +157,11 @@ export function createScene(container) {
     const size = sceneRect.getSize(new THREE.Vector3());
     return Math.min(window.innerWidth / size.x, freeHeight() / size.y);
   }
-  // Обычный масштаб: на телефоне — не мельче пальца
+  // Обычный масштаб: на телефоне — не мельче пальца и ещё ближе (CAMERA.phoneZoom)
   // (приближаем только на сенсорных экранах: мышью и в мелкую клетку попасть легко)
   function fitScale() {
     const fit = wholeSceneScale();
-    return isTouch ? Math.max(fit, MIN_CELL_PX / CELL_WIDTH_IN_VIEW) : fit;
+    return isTouch ? Math.max(fit, MIN_CELL_PX / CELL_WIDTH_IN_VIEW) * CAMERA.phoneZoom : fit;
   }
 
   function resize() {
@@ -192,13 +193,30 @@ export function createScene(container) {
   }
 
   let lastPan = -Infinity; // когда игрок последний раз двигал сцену пальцем
+  let followed = false;    // телефон: камера уже встала на героя (в первый раз — сразу, без переезда)
 
   const cameraControl = {
     // Сдвинуть сцену вслед за пальцем (в точках экрана). В крупном плане камера держит героя — не двигаем.
     panBy(dxPx, dyPx) {
       if (closeUp) return;
-      view.center.x -= dxPx / view.scale;
-      view.center.y += dyPx / view.scale;
+      view.center.x -= dxPx / scaleNow();
+      view.center.y += dyPx / scaleNow();
+      lastPan = performance.now();
+      applyView();
+    },
+
+    // Щипок двумя пальцами: factor — во сколько раз ближе (меньше 1 — дальше); (sx, sy) — точка экрана между пальцами,
+    // она остаётся на месте. Отдалить — до всего острова, приблизить — до CAMERA.pinchMax от обычного вида
+    zoomAt(factor, sx, sy) {
+      if (closeUp || turning || story) return;
+      const s0 = scaleNow();
+      pinch = Math.min(CAMERA.pinchMax, Math.max(wholeSceneScale() / view.scale, pinch * factor));
+      const s1 = scaleNow();
+      const half = freeHeight() / 2;
+      const x = view.center.x + (sx - window.innerWidth / 2) / s0; // точка сцены под пальцами
+      const y = view.center.y + (half - sy) / s0;
+      view.center.x = x - (sx - window.innerWidth / 2) / s1;
+      view.center.y = y - (half - sy) / s1;
       lastPan = performance.now();
       applyView();
     },
@@ -218,27 +236,37 @@ export function createScene(container) {
 
       // Крупный план — от вида «вся сцена», поэтому на телефоне (где и так ближе) герой того же размера
       // во время поворота приближение не пересчитываем — иначе оно тоже «гуляет»
-      const zoomTarget = turning ? zoom : closeUp ? Math.max(1.25, (wholeSceneScale() * CAMERA.closeUpZoom) / view.scale) : 1;
+      const zoomTarget = turning ? zoom : closeUp ? Math.max(1.25 / pinch, (wholeSceneScale() * CAMERA.closeUpZoom) / (view.scale * pinch)) : 1;
       zoom += (zoomTarget - zoom) * Math.min(1, dt * 6);
       if (Math.abs(zoomTarget - zoom) < 0.001) zoom = zoomTarget;
 
       breath.set(Math.sin(time * 0.37) * CAMERA.breath, Math.sin(time * 0.23 + 1) * CAMERA.breath * 0.6);
       if (closeUp && followPos && !turning) {
         const p = toView(followPos.clone().setY(followPos.y + 0.3)); // центр — на уровне груди героя
+        if (isTouch) p.y += ((CAMERA.phoneHeroY - 0.5) * freeHeight()) / scaleNow(); // на телефоне герой чуть ниже середины
         const k = Math.min(1, dt * 5);
         view.center.x += (p.x - view.center.x) * k;
         view.center.y += (p.y - view.center.y) * k;
       }
       const canFollow = !closeUp && isTouch && CAMERA.followOnPhone && followPos && performance.now() - lastPan > 3000;
       if (canFollow) {
+        // герой — не в середине, а чуть ниже (CAMERA.phoneHeroY): впереди, над ним, видно больше
+        const s = scaleNow();
         const p = toView(followPos);
-        const halfW = (window.innerWidth / 2 / scaleNow()) * 0.55; // «спокойная зона» — середина экрана
-        const halfH = (freeHeight() / 2 / scaleNow()) * 0.55;
+        const goalY = p.y + ((CAMERA.phoneHeroY - 0.5) * freeHeight()) / s;
         const dx = p.x - view.center.x;
-        const dy = p.y - view.center.y;
-        const k = Math.min(1, dt * 2.5);
-        if (Math.abs(dx) > halfW) view.center.x += (dx - Math.sign(dx) * halfW) * k;
-        if (Math.abs(dy) > halfH) view.center.y += (dy - Math.sign(dy) * halfH) * k;
+        const dy = goalY - view.center.y;
+        if (!followed) { // первый кадр игры — сразу на героя
+          followed = true;
+          view.center.x += dx;
+          view.center.y += dy;
+        } else {
+          const halfW = (window.innerWidth / 2 / s) * CAMERA.phoneCalm; // «спокойная зона»
+          const halfH = (freeHeight() / 2 / s) * CAMERA.phoneCalm;
+          const k = Math.min(1, dt * 2.5);
+          if (Math.abs(dx) > halfW) view.center.x += (dx - Math.sign(dx) * halfW) * k;
+          if (Math.abs(dy) > halfH) view.center.y += (dy - Math.sign(dy) * halfH) * k;
+        }
       }
       if (story) { // вступление: плавно едем к кадру (масштаб — тоже плавно, «в разах», а не в точках)
         const to = story.to || { x: view.center.x, y: view.center.y, scale: scaleNow() };

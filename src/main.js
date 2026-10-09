@@ -451,6 +451,9 @@ const input = createInput(renderer.domElement, camera, {
   onPan(dx, dy) {
     cameraControl.panBy(dx, dy);
   },
+  onPinch(factor, x, y) {
+    cameraControl.zoomAt(factor, x, y);
+  },
   onTool(n) {
     if (n === 4) toggleShop();
     else if (TOOLS[n - 1]) selectTool(TOOLS[n - 1].id);
