@@ -473,8 +473,8 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   let shopTab = 'coins';
   let lastView = null;
   const shop = el('div', 'shop-backdrop');
-  shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
-    <div class="shop-tabs"><button data-tab="coins" title="семена за монеты">${pixelIcon('coin')}</button><button data-tab="embers" title="улучшения за огоньки">${pixelIcon('ember')}</button></div>
+  shop.innerHTML = `<div class="shop store"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
+    <div class="shop-tabs"><button data-tab="coins" title="семена за монеты">${pixelIcon('coin')}<span class="tab-name">Семена</span></button><button data-tab="embers" title="улучшения за огоньки">${pixelIcon('ember')}<span class="tab-name">Улучшения</span></button></div>
     <div class="shop-list"></div></div>`;
   const shopList = shop.querySelector('.shop-list');
   const tabButtons = shop.querySelectorAll('.shop-tabs button');
@@ -518,7 +518,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       }
       const owned = row.seedPrice === 0 ? '∞' : row.owned;
       const buy = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} ${pixelIcon('coin')}${row.seedPrice * n}</button>`;
-      return `<div class="shop-row seed-card">${plantPicture(row.type)}<div class="seed-body">
+      return `<div class="shop-row seed-card${row.type === view.selectedSeed ? ' current' : ''}">${plantPicture(row.type)}<div class="seed-body">
         <div class="shop-name"><span class="title">${row.name}</span>${stat('bag', owned, 'семян в мешочке')}</div>
         ${plantStats(row)}
         ${row.seedPrice === 0 ? '' : `<div class="shop-buy">${buy(1)}${buy(5)}</div>`}</div></div>`;

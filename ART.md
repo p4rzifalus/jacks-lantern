@@ -11,6 +11,9 @@
 Пиксельные спрайты рисуются чётко, целым масштабом (каждый пиксель рисунка = ровный квадрат на экране).
 Общего пиксельного фильтра на всю картинку больше нет.
 
+**Интерфейс — рисованный** (стиль «Б · пергаментная карточка», выбран в этапе 14а): бумага, чернильные контуры,
+лоза и завитки — картинки (задания ниже, «Интерфейс»). Значки, семена и монеты внутри окон остаются пиксельными.
+
 ## Как сдавать файлы
 - Кладёшь PNG в папку `art/` в корне проекта с именем из таблицы — игра берёт его вместо сгенерированного.
 - Рельеф (карту нормалей) и шероховатость для реалистичных текстур игра **сделает сама из картинки** (`npm run art`).
@@ -77,6 +80,30 @@
 ### Ночь (`sky-night.png`)
 Цвета сцены (сверху вниз): `#080a16` → `#121633` → `#1d1f3f` → `#2a2742`.
 > Calm night sky backdrop for a cozy video game. Painterly gradient from almost black deep navy at the top (#080a16) through dark indigo (#121633, #1d1f3f) to muted dark violet near the bottom (#2a2742). Very dark, soft, low contrast. Faint thin bluish clouds lit by unseen moonlight in the lower half. No stars, no moon disc, no bright spots, no glow, no horizon line, no landscape, no trees, no buildings, no objects, no text, no border. Slight film grain. Square 1536x1536.
+
+## Интерфейс — задания для GPT Image (стиль «Б · пергаментная карточка»)
+Касается всего интерфейса: окон, панели инструментов внизу, монет и времени суток, меню, стартового экрана,
+реплик Джека. Образцы стиля — `docs/ui-refs/` (главный — `02-parchment-quest-skills.webp`).
+Пока картинок нет, игра рисует заглушки сама. Кладёшь PNG в `art/` под именем из таблицы — игра берёт его.
+`npm run art` для этих картинок не нужен.
+
+**Общий хвост (добавить в конец каждого задания, кроме обложки):**
+> Hand-painted storybook game UI asset, cozy autumn fantasy, warm parchment tones and dark brown dip-pen ink outlines, soft flat even lighting, no shadows cast on the background, no text, no letters, no numbers.
+
+**Прозрачный фон.** Где в таблице написано «прозрачный» — проси PNG с прозрачным фоном (в ChatGPT: «transparent background»).
+Если прозрачность не получилась — присылай на чисто-белом фоне, я вырежу сам.
+
+| Файл | Формат | Задание (перед хвостом) |
+|---|---|---|
+| `ui-paper.png` | 1024×1024, без прозрачности | Seamless tileable texture of aged parchment paper seen straight on: warm cream-beige, soft uneven tone, faint paper fibres, a few tiny specks. Very subtle and calm so text stays readable on it. No stains, no folds, no burnt edges, no vignette; edges must tile seamlessly. |
+| `ui-card.png` | 1024×1024, прозрачный | One blank rectangular parchment card seen straight on, filling the square with a small even transparent margin. Hand-drawn dark brown ink outline about 6 px thick, slightly wobbly like a dip pen, rounded corners. The paper near the edge is a little darker and toasted, the middle is plain, empty and evenly toned. Nothing drawn inside the card. Transparent background outside the card. |
+| `ui-vine.png` | 1024×1024, прозрачный | Decorative corner ornament: a thin curling vine with small olive-green leaves and two or three tiny tendrils, growing along an L-shaped corner — up the left edge and along the top edge, meeting in the top-left corner. Dark ink outlines, leaves in two shades of olive green. Only the vine, transparent background. |
+| `ui-flourish.png` | 1536×1024, прозрачный | Small decorative heading flourish, pointing right: a thin ink swirl that ends in a sprig with two tiny olive leaves. Dark brown ink, horizontal, centered, occupying a narrow strip across the middle of the image. Only the ornament, transparent background. |
+| `ui-divider.png` | 1536×1024, прозрачный | Thin hand-drawn horizontal divider: a gently wavy ink vine line with small olive leaves at even intervals and a tiny five-petal flower in the very center, symmetric left and right. Occupies a narrow strip across the middle of the image. Only the divider, transparent background. |
+
+### Обложка стартового экрана (`cover.png` 1536×1024 и `cover-tall.png` 1024×1536 — для телефона)
+Хвост выше **не добавлять**. Одинаковое задание для обоих форматов:
+> Storybook illustration for a cozy game title screen: a small floating island in an autumn sky at dusk, with a tidy vegetable garden of neat square plots, a small wooden cottage with warm lit windows, a large wicker basket in the middle of the garden and a few glowing lanterns. A raccoon holding a glowing lantern stands at the edge of the garden. Soft mist swirls below and around the island; far away, a few faint friendly glowing ghosts drift up from the mist. Warm amber, muted olive and dusky teal palette, hand-painted look with soft dark ink outlines, calm and cozy, not scary. Keep the upper third of the image quiet (sky only) for the game title. No text, no letters.
 
 ## Пиксельные спрайты
 Сейчас нарисованы кодом (`src/art/sprite-art.js`). Свой лист — PNG **с прозрачным фоном**, того же размера
