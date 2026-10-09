@@ -88,9 +88,9 @@ body { font-family: var(--font); color: var(--ink); }
 .shop-close:hover, .menu-close:hover { filter: brightness(1.1); }
 
 /* заголовок с завитками: ~ Магазин ~ */
-.flourished { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.flourished { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .flourished::before, .flourished::after {
-  content: ''; width: 54px; height: 12px; flex: none; background: var(--ui-flourish) center / contain no-repeat;
+  content: ''; width: 32px; height: 8px; flex: none; opacity: 0.85; background: var(--ui-flourish) center / contain no-repeat;
 }
 .flourished::before { transform: scaleX(-1); }
 
@@ -102,8 +102,8 @@ body { font-family: var(--font); color: var(--ink); }
 .shop::before, .menu::before { right: -44px; top: -46px; transform: scaleX(-1); }
 .shop::after, .menu::after { left: -44px; bottom: -46px; transform: scaleY(-1); }
 
-/* разделитель: лоза с цветком */
-.divider { height: 16px; margin: 4px 10px; background: var(--ui-divider) center / contain no-repeat; }
+/* разделитель: лоза с цветком — небольшой и только там, где правда делит окно на части */
+.divider { height: 10px; margin: 4px auto; max-width: 150px; background: var(--ui-divider) center / contain no-repeat; }
 
 /* вкладки-ярлыки над окном: семена — зелёный, улучшения — лиловый */
 .shop-tabs { position: absolute; left: 6px; top: calc(-44px - var(--card-edge)); display: flex; gap: 4px; }
@@ -251,11 +251,11 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
 }
 .menu-title { font-size: 40px; text-align: center; line-height: 1.1; }
 .menu-subtitle { text-align: center; font-size: 16px; font-style: italic; color: var(--ink-dim); margin: 4px 0 6px; }
-.menu-subtitle::after { content: ''; display: block; height: 16px; margin: 8px 20px 10px; background: var(--ui-divider) center / contain no-repeat; }
+.menu-subtitle::after { content: ''; display: block; height: 10px; max-width: 150px; margin: 10px auto 14px; background: var(--ui-divider) center / contain no-repeat; }
 .menu-head { display: flex; justify-content: center; align-items: center; font-size: 28px; margin-bottom: 4px; }
 .menu-section { padding: 12px 0; }
-.menu-section::before {
-  content: ''; display: block; height: 16px; margin: -6px 10px 10px; background: var(--ui-divider) center / contain no-repeat;
+.menu-section + .menu-section::before { /* только между разделами: звук | кнопки */
+  content: ''; display: block; height: 10px; width: 150px; max-width: 100%; margin: -2px auto 14px; background: var(--ui-divider) center / contain no-repeat;
 }
 .menu-text { font-size: 16px; line-height: 1.5; margin-bottom: 16px; }
 .menu-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
