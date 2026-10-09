@@ -24,6 +24,8 @@ const HELD_OFFSET = {
   down: [0, 0.2, 0.03], left: [-0.22, 0.2, 0.03], right: [0.22, 0.2, 0.03], up: [0, 0.22, -0.03],
 };
 
+const SHAKE_TIME = 0.4;   // сколько енот качает головой
+const HEAD_HEIGHT = 1.35; // где над енотом встаёт пузырь мысли (метров сцены)
 const BLOCKED_SECONDS = 0.4; // сколько можно упираться в край по маршруту, прежде чем бросить эту точку
 
 // Фонарь: висит сбоку, по глубине — между героем и предметом в лапах: [x, z]
@@ -110,6 +112,7 @@ export class Hero {
     this.walkTime = 0;
     this.path = [];          // точки маршрута после клика
     this.blocked = 0;        // сколько секунд герой упирается в край, идя по маршруту
+    this.shakeTime = 0;      // сколько ещё качать головой («нельзя»)
     this.faceTo = null;      // куда повернуться в конце маршрута
     this.onArrive = null;
   }
@@ -156,6 +159,16 @@ export class Hero {
   playAction() {
     this.actTime = ACT_TIME;
     this.animTime = 0;
+  }
+
+  // «Нельзя»: енот качает головой (спрайт коротко покачивается из стороны в сторону)
+  shake() {
+    this.shakeTime = SHAKE_TIME;
+  }
+
+  // Точка над головой — сюда встаёт пузырь мысли
+  get headPoint() {
+    return this.position.clone().setY(HEAD_HEIGHT * HERO_SCALE);
   }
 
   get position() {
@@ -238,6 +251,9 @@ export class Hero {
     this.lantern.mesh.position.set(lx, 0.1 + bob * 0.5, lz).add(HERO_LAYER);
     this.lantern.mesh.rotation.z = moving ? Math.sin(this.animTime * 9) * 0.15 : 0;
     this.hand.scale.x = dir === 'left' ? -1 : 1; // рисунки смотрят вправо (носик лейки), влево — зеркалим
+    // качает головой: тело покачивается влево-вправо, всё слабее
+    if (this.shakeTime > 0) this.shakeTime = Math.max(0, this.shakeTime - dt);
+    this.sprite.mesh.position.x = this.shakeTime > 0 ? Math.sin(this.shakeTime * 45) * 0.035 * (this.shakeTime / SHAKE_TIME) : 0;
   }
 
   arrive() {

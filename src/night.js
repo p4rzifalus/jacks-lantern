@@ -294,7 +294,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
       if (loot) {
         spirit.target = target;
         spirit.loot = loot;
-        onStolen(spirit, loot);
+        onStolen?.(spirit, loot);
       }
       return loot;
     },
@@ -324,12 +324,6 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     // Дух ушёл в туман
     gone(spirit) {
       spirits = spirits.filter((s) => s !== spirit);
-    },
-
-    // Подпись для подсказки: «Призрак утащил тыкву»
-    describe(spirit, loot) {
-      if (loot.crop) return `${spirit.name} утащил ${PLANTS[loot.crop].forms[0]}`;
-      return `${spirit.name} утащил из корзины ${coinsOf(loot.coins)}`;
     },
 
     // Только для проверки (панель G): позвать духа прямо сейчас с любой стороны, даже днём

@@ -18,6 +18,31 @@ const LEAN = 0.35;
 const WET_SHINE = { day: 0.9, night: 0.5 };
 const WET_SKY_REFLECTION = 0.25; // сколько неба отражается в мокрой земле (1 — как в остальном мире)
 
+// Мягкое тёплое пятно света на земле: им подсвечиваем, куда идти (первая грядка, большая корзина)
+function glowTexture() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function glowSpot(size) {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: glowTexture(), color: GUIDE_COLOR, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  mesh.visible = false;
+  return mesh;
+}
+const GUIDE_COLOR = '#ffc46a';
+
 // У каждой грядки свой кусок текстуры (сдвиг и разворот на 180°), чтобы рисунок земли не повторялся клетка в клетку.
 // Борозды остаются в одну сторону
 function varyTopUV(geometry) {
@@ -64,6 +89,35 @@ export class GardenView {
         this.cells.push({ x, z, tile, plant, shownStage: null, shownType: null, strike: 0, lean: 0, phase: Math.random() * 2 });
       }
     }
+
+    // Подсказки светом: грядка, куда стоит пойти (в начале новой игры), и большая корзина, когда корзинка полна
+    this.guide = glowSpot(CELL_SIZE * 1.3);
+    this.guide.position.y = 0.05;
+    this.basketCall = glowSpot(CELL_SIZE * 2.4);
+    const b = cellToWorld(BASKET_CELL.x, BASKET_CELL.z);
+    this.basketCall.position.set(b.x, 0.05, b.z);
+    scene.add(this.guide, this.basketCall);
+  }
+
+  // Подсветить грядку c (null — убрать): мягко пульсирует, пока на ней ничего не сделали
+  setGuide(c) {
+    this.guide.visible = !!c;
+    if (c) {
+      const p = cellToWorld(c.x, c.z);
+      this.guide.position.set(p.x, 0.05, p.z);
+    }
+  }
+
+  // Большая корзина зовёт (корзинка для сбора полна): тёплый свет вокруг неё
+  setBasketCall(on) {
+    this.basketCall.visible = on;
+  }
+
+  // Пульс подсветок (каждый кадр)
+  pulse(time) {
+    const k = 0.5 + 0.5 * Math.sin(time * 3);
+    this.guide.material.opacity = 0.25 + 0.35 * k;
+    this.basketCall.material.opacity = 0.2 + 0.3 * k;
   }
 
   // Блеск мокрой земли по времени суток: lamps — насколько горят фонари (0 — день, 1 — вечер и ночь)
@@ -93,6 +147,7 @@ export class GardenView {
         const dry = stage === RIPE && this.garden.isDry(view, now); // отслужил своё — засох, на духов не смотрит
         const guard = stage === RIPE && !dry;
         let col = dry ? PLANT_FRAME.dry : stage;
+        if (stage === 0 && !this.garden.isWet(view, now)) col = PLANT_FRAME.thirsty; // семечко без воды — выцветшее
         let [sx, sy] = [1, 1];
         if (guard && view.strike > 0) {
           view.strike = Math.max(0, view.strike - dt);

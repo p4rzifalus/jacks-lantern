@@ -1,4 +1,4 @@
-// Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, подсказки.
+// Интерфейс поверх сцены: кнопка меню, камера, панель инструментов, выбор семян, монеты, магазин, гербарий.
 import { plural, formatTime } from './text.js';
 
 // Пиксельные значки 12×12: «#» — закрашенный пиксель, «.» — пусто
@@ -103,6 +103,105 @@ const PIXEL_ICONS = {
     '............',
     '..########..',
   ],
+  // значки пузыря мысли над енотом и всплывающих чисел (см. popups.js)
+  drop: [
+    '............',
+    '.....##.....',
+    '.....##.....',
+    '....####....',
+    '....####....',
+    '...######...',
+    '..########..',
+    '..########..',
+    '..########..',
+    '...######...',
+    '....####....',
+    '............',
+  ],
+  dropEmpty: [
+    '............',
+    '.....##.....',
+    '.....##.....',
+    '....#..#....',
+    '....#..#....',
+    '...#....#...',
+    '..#......#..',
+    '..#......#..',
+    '..#......#..',
+    '...#....#...',
+    '....####....',
+    '............',
+  ],
+  clock: [
+    '............',
+    '...######...',
+    '..#......#..',
+    '.#...#....#.',
+    '.#...#....#.',
+    '.#...#....#.',
+    '.#...####.#.',
+    '.#........#.',
+    '.#........#.',
+    '..#......#..',
+    '...######...',
+    '............',
+  ],
+  hole: [
+    '............',
+    '............',
+    '............',
+    '............',
+    '............',
+    '............',
+    '...######...',
+    '.##......##.',
+    '#..######..#',
+    '#..........#',
+    '.##########.',
+    '............',
+  ],
+  basketFull: [
+    '..##..##....',
+    '.####.###...',
+    '.####.####..',
+    '..##..###...',
+    '.#........#.',
+    '############',
+    '############',
+    '.#.##.##.#..',
+    '.##########.',
+    '.#.##.##.##.',
+    '..########..',
+    '............',
+  ],
+  bagEmpty: [
+    '............',
+    '............',
+    '....#..#....',
+    '.....##.....',
+    '....#..#....',
+    '...#....#...',
+    '..#......#..',
+    '..#......#..',
+    '..#......#..',
+    '..#......#..',
+    '...######...',
+    '............',
+  ],
+  coin: [
+    '............',
+    '....####....',
+    '..########..',
+    '.###....###.',
+    '.##.####.##.',
+    '.##.####.##.',
+    '.##.####.##.',
+    '.##.####.##.',
+    '.###....###.',
+    '..########..',
+    '....####....',
+    '............',
+  ],
   // книга — гербарий
   book: [
     '............',
@@ -167,7 +266,7 @@ const PIXEL_ICONS = {
 PIXEL_ICONS.rotateLeft = PIXEL_ICONS.rotateRight.map((row) => [...row].reverse().join(''));
 
 // Рисуем значок квадратиками без сглаживания, цвет берётся у кнопки
-function pixelIcon(name) {
+export function pixelIcon(name) {
   const rects = [];
   PIXEL_ICONS[name].forEach((row, y) => {
     [...row].forEach((ch, x) => {
@@ -245,6 +344,8 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   const basketCount = el('span', 'count');
   toolButtons.basket.appendChild(basketCount);
   const shopButton = toolButton(4, 'shop', 'Магазин');
+  let shopWants = false; // зовёт сам: есть на что потратить монеты
+  let shopCalls = 0;     // до какого времени зовёт после события (кончились семена, открылись новые)
   shopButton.addEventListener('click', () => onShopToggle());
   toolbar.appendChild(shopButton);
   document.body.appendChild(toolbar);
@@ -353,15 +454,14 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
     }).join('');
   }
 
-  const hintBox = el('div', 'hint');
-  document.body.appendChild(hintBox);
-  let hintTimer;
 
   return {
     // view — всё, что нужно показать: инструмент, монеты, семена, строки магазина
     render(view) {
       for (const [id, b] of Object.entries(toolButtons)) b.classList.toggle('selected', id === view.tool);
       shopButton.classList.toggle('selected', view.shopOpen);
+      shopWants = view.shopBeckon;
+      shopButton.classList.toggle('beckon', shopWants || shopCalls > performance.now());
       closeUpButton.classList.toggle('on', !!view.closeUp);
       basketCount.textContent = `${view.carried.length}/${view.capacity}`;
       basketCount.classList.toggle('full', view.carried.length >= view.capacity);
@@ -392,11 +492,28 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       daytimeFill.style.width = `${Math.round((1 - phase.progress) * 100)}%`;
     },
 
-    hint(text, ms = 1600) {
-      hintBox.textContent = text;
-      hintBox.classList.add('visible');
-      clearTimeout(hintTimer);
-      hintTimer = setTimeout(() => hintBox.classList.remove('visible'), ms);
+    // Магазин зовёт несколько секунд: мерцает кнопка
+    beckonShop(ms = 4000) {
+      shopCalls = performance.now() + ms;
+      shopButton.classList.add('beckon');
+      setTimeout(() => shopButton.classList.toggle('beckon', shopWants || shopCalls > performance.now()), ms + 50);
+    },
+
+    // Открылись новые семена: мешочек вылетает из точки [x, y] (большая корзина) и летит к кнопке магазина
+    flySeedsToShop([x, y]) {
+      const bag = el('div', 'fly-seed', pixelIcon('seeds'));
+      bag.style.left = `${x - 14}px`;
+      bag.style.top = `${y - 14}px`;
+      document.body.appendChild(bag);
+      const to = shopButton.getBoundingClientRect();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        bag.style.transform = `translate(${to.left + to.width / 2 - x}px, ${to.top + to.height / 2 - y}px) scale(0.6)`;
+        bag.style.opacity = '0.2';
+      }));
+      setTimeout(() => {
+        bag.remove();
+        this.beckonShop(6000);
+      }, 900);
     },
   };
 }

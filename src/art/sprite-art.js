@@ -228,7 +228,7 @@ export function drawHeroSheet(skin) {
 // Кадр 32×40, земля — нижняя строка. Колонки: стадии 0 семечко, 1 росток, 2 куст, 3 спелое;
 // дальше — спелое растение ночью: 4–5 настороже (по улице ходит дух), 6 замах, 7 удар.
 // Строки — растения в порядке PLANT_ORDER (морковь, редис, тыква, подсолнух, гриб, потом гибриды).
-export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 9, alert: [4, 2], windup: 6, strike: 7, dry: 8 };
+export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 10, alert: [4, 2], windup: 6, strike: 7, dry: 8, thirsty: 9 };
 
 // Маленькая кучка земли у основания растения
 function mound(d) {
@@ -491,6 +491,12 @@ const NO_SPROUT = new Set(['mushroom', 'moonMushroom']); // грибы вмес�
 const DRY_DARK = [70, 50, 34];
 const DRY_LIGHT = [184, 150, 96];
 const DRY_GROUND = 35; // где стебель уходит в землю (от этой строки растение «оседает»)
+// Семечко без воды: лунка и семена выцветшие, пыльные — видно, что ему чего-то не хватает
+const DUST = [176, 158, 132];
+function thirstySprite(x, y, color) {
+  return [x, y, color.map((v, k) => Math.round(v + (DUST[k] - v) * 0.55)), false];
+}
+
 function drySprite(x, y, [r, g, b]) {
   const l = Math.min(1, (0.3 * r + 0.55 * g + 0.15 * b) / 200);
   const color = DRY_DARK.map((v, k) => Math.round(v + (DRY_LIGHT[k] - v) * l));
@@ -502,13 +508,14 @@ export function drawPlantSheet() {
   const { frameW, frameH, cols } = PLANT_FRAME;
   const sheet = new PixelSheet(frameW * cols, frameH * PLANT_ORDER.length);
   // что в какой колонке: [стадия, поза, кадр]
-  const columns = [[0], [1], [2], [3], [3, 'alert', 0], [3, 'alert', 1], [3, 'windup'], [3, 'strike'], [3, 'dry']];
+  const columns = [[0], [1], [2], [3], [3, 'alert', 0], [3, 'alert', 1], [3, 'windup'], [3, 'strike'], [3, 'dry'], [0, 'thirsty']];
+  const REMAP = { dry: drySprite, thirsty: thirstySprite };
   PLANT_ORDER.forEach((type, row) => {
     columns.forEach(([stage, pose, i], col) => {
-      mound(sheet.frame(col, row, frameW, frameH));
-      const dry = pose === 'dry';
-      const d = sheet.frame(col, row, frameW, frameH, false, dry ? drySprite : null);
-      if (dry) pose = undefined;
+      const remap = REMAP[pose] || null;
+      mound(sheet.frame(col, row, frameW, frameH, false, pose === 'thirsty' ? remap : null)); // у сухой лунки и земля выцвела
+      const d = sheet.frame(col, row, frameW, frameH, false, remap);
+      if (remap) pose = undefined;
       if (stage === 0) { d.px(14, 35, C.seed); d.px(17, 36, C.seed); }
       else if (stage === 1 && !NO_SPROUT.has(artType(type))) sprout(d);
       else artOf(DRAW_PLANT, type)(d, stage, pose, i);

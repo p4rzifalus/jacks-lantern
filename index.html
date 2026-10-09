@@ -52,7 +52,7 @@
       canvas { touch-action: none; } /* палец двигает сцену, а не страницу */
 
       /* Общая «стеклянная» панель: полупрозрачная, размывает то, что за ней */
-      .toolbar button, .seed-row button, .shop, .hud, .daytime, .hint, .corner-bar button, .menu {
+      .toolbar button, .seed-row button, .shop, .hud, .daytime, .corner-bar button, .menu {
         background: var(--glass);
         border: 1px solid var(--edge);
         border-radius: 12px;
@@ -178,12 +178,34 @@
       .daytime-bar i { display: block; height: 100%; background: currentColor; opacity: 0.7; }
       .daytime[data-phase='night'] { color: #b8c6ff; }
       body.intro .daytime { display: none; }
-      .hint {
-        position: fixed; left: 50%; bottom: 168px; transform: translateX(-50%);
-        padding: 9px 16px; max-width: calc(100vw - 32px); text-align: center; font-size: 13px;
-        opacity: 0; transition: opacity 0.3s; pointer-events: none;
+
+      /* Подсказки без слов над миром (popups.js): пузырь мысли над енотом и всплывающие числа */
+      .popups { position: fixed; inset: 0; pointer-events: none; }
+      .thought {
+        position: fixed; transform: translate(-50%, -100%) scale(0.4); transform-origin: 50% 100%; opacity: 0;
+        padding: 7px 9px; border-radius: 16px; color: var(--amber);
+        background: var(--glass-strong); border: 1px solid var(--edge); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.6, 1), opacity 0.18s;
       }
-      .hint.visible { opacity: 1; }
+      .thought.visible { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+      .thought .pixel-icon { width: 26px; height: 26px; fill: currentColor; display: block; }
+      /* хвостик пузыря — два кружочка к голове */
+      .thought::before, .thought::after {
+        content: ''; position: absolute; border-radius: 50%; background: var(--glass-strong); border: 1px solid var(--edge);
+      }
+      .thought::before { width: 8px; height: 8px; left: 50%; bottom: -10px; margin-left: -6px; }
+      .thought::after { width: 5px; height: 5px; left: 50%; bottom: -17px; margin-left: -1px; }
+      .float {
+        position: fixed; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 3px;
+        font-size: 22px; color: var(--amber); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); white-space: nowrap;
+      }
+      .float .pixel-icon { width: 16px; height: 16px; fill: currentColor; }
+      /* кнопка магазина зовёт: есть новые семена или хватает монет на новое */
+      @keyframes beckon { 0%, 100% { box-shadow: 0 0 0 var(--amber-soft); } 50% { box-shadow: 0 0 22px var(--amber), 0 0 0 2px var(--amber-soft); color: var(--amber); } }
+      .toolbar button.beckon:not(.selected) { animation: beckon 1.6s ease-in-out infinite; }
+      /* мешочек семян летит из корзины к магазину */
+      .fly-seed { position: fixed; color: var(--amber); pointer-events: none; transition: transform 0.9s cubic-bezier(0.5, -0.4, 0.6, 1), opacity 0.9s; }
+      .fly-seed .pixel-icon { width: 28px; height: 28px; fill: currentColor; filter: drop-shadow(0 0 6px var(--amber)); }
 
       /* Меню и камера — в левом верхнем углу */
       .corner-bar { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; }
@@ -212,7 +234,7 @@
       }
       .menu-backdrop.visible { display: flex; }
       body.intro .menu-backdrop { background: radial-gradient(ellipse at center, rgba(12, 10, 20, 0.25), rgba(12, 10, 20, 0.7)); }
-      body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .hint { display: none; }
+      body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .popups { display: none; }
       .menu {
         width: 100%; max-width: 380px; max-height: 100%; overflow-y: auto; padding: 18px;
         background: var(--glass-strong); box-sizing: border-box;

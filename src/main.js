@@ -9,6 +9,7 @@ import { Hero } from './hero.js';
 import { GardenView } from './world/garden-view.js';
 import { createInput } from './input.js';
 import { createUI, TOOLS } from './ui.js';
+import { createPopups } from './popups.js';
 import { createDecor } from './decor.js';
 import { detectQuality } from './render/quality.js';
 import { createPipeline } from './render/pipeline.js';
@@ -56,24 +57,31 @@ const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, wea
 // ---------- Правила ----------
 let restarting = false; // во время «начать заново» не сохраняем
 let menu = null; // меню и стартовый экран (создаются ниже)
-let effectJustPlayed = false; // подсказка сразу после действия («+2 мон.») — не ошибка, «нельзя» не звучит
 const game = createGame({
-  onHint(text, ms) {
-    if (!effectJustPlayed) sound.deny();
-    ui.hint(text, ms);
+  // так нельзя: енот качает головой и думает значком (без слов)
+  onRefuse(icon) {
+    sound.deny();
+    hero.shake();
+    popups.think(icon, () => hero.headPoint);
+    if (icon === 'bagEmpty') ui.beckonShop(); // семена кончились — магазин зовёт
   },
-  onEffect(name, cell, earned) {
-    effectJustPlayed = true;
-    queueMicrotask(() => { effectJustPlayed = false; });
-    if (name === 'unlocked') return sound.unlocked();
-    if (name === 'hybrid') return discovered(cell, earned); // скрещивание: earned — { type, first }
-    sound[name](earned); // при продаже: чем больше выручка, тем больше монеток звенит
-    hero.playAction(); // герой наклоняется: сажает, поливает, собирает, кладёт в корзинку
+  onEffect(name, cell, extra) {
     const at = cellToWorld(cell.x, cell.z);
+    if (name === 'unlocked') { // открылись новые семена: мешочек летит из корзины к магазину
+      sound.unlocked();
+      return ui.flySeedsToShop(popups.screenOf(at.setY(0.6)));
+    }
+    if (name === 'hybrid') return discovered(cell, extra); // скрещивание: extra — { type, first }
+    if (name === 'seeds') return popups.float(at.setY(0.6), `+${extra}`, 'seeds'); // сухое растение оставило семена
+    sound[name](extra); // при продаже: чем больше выручка, тем больше монеток звенит
+    hero.playAction(); // герой наклоняется: сажает, поливает, собирает, кладёт в корзинку
     if (name === 'planted') effects.dirt(at);
     if (name === 'watered') effects.water(hero.frontPoint.lerp(hero.position, 0.4), at);
     if (name === 'harvested') effects.sparkle(at);
-    if (name === 'sold') effects.coins(at);
+    if (name === 'sold') {
+      effects.coins(at);
+      popups.float(at.clone().setY(0.9), `+${extra}`, 'coin');
+    }
   },
   onChange: refresh,
 });
@@ -83,6 +91,7 @@ const game = createGame({
 function discovered(cell, { type, first }) {
   sound.hybrid(first);
   effects.discovery(cellToWorld(cell.x, cell.z), first);
+  if (!first) popups.float(cellToWorld(cell.x, cell.z).setY(0.6), '+1', 'seeds');
   if (first) setTimeout(() => menu.showDiscovery(discoveryCard(type)), 900);
 }
 
@@ -151,9 +160,6 @@ const night = createNight({
     attacks.hit(spirit);
     sound.spiritHit();
   },
-  onStolen(spirit, loot) {
-    ui.hint(night.describe(spirit, loot), 2800);
-  },
   onMorning(summary) {
     spirits.dawn();
     embers.dawn(); // несобранные огоньки сами летят в счётчик
@@ -181,7 +187,6 @@ const spirits = createSpirits(scene, camera, landmarks.island, night, {
     sound.spiritScared();
     if (from) effects.sparkle(cellToWorld(from.x, from.z));
     embers.add(at);
-    if (returned) ui.hint(`${spirit.name} испугался и уронил ${returned.crop ? PLANTS[returned.crop].forms[0] : 'монеты'}`, 2800);
   },
 });
 
@@ -221,6 +226,9 @@ function rotateWorld(step) {
   cameraControl.rotate(step, hero.position);
   refresh();
 }
+
+// Подсказки без слов над миром: пузырь мысли над енотом, всплывающие «+12»
+const popups = createPopups(camera, renderer.domElement);
 
 const ui = createUI({
   onSelectTool: selectTool,
@@ -266,7 +274,9 @@ function refresh() {
   hero.setHeld({ tool, seed: selectedSeed, carried: carried.map((item) => item.type) });
   basket.userData.fill.visible = game.hasHarvest();
   hero.setLanternReach(game.perks().lanternRadius);
-  ui.render({ ...game.view(), closeUp: cameraControl.isCloseUp });
+  const view = game.view();
+  gardenView.setBasketCall(view.carried.length >= view.capacity); // корзинка полна — большая корзина зовёт
+  ui.render({ ...view, closeUp: cameraControl.isCloseUp });
   save();
 }
 
@@ -386,6 +396,24 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') rotateWorld(1);
 });
 
+// ---------- Подсказки светом ----------
+// В новой игре (огород пуст, ничего ещё не собирали) мягко светится ближайшая к еноту грядка — «начни здесь»
+function guideCell() {
+  const { harvested, carried } = game.state;
+  if (carried.length || Object.keys(harvested).length || game.garden.cells.some((c) => c.plant)) return null;
+  const at = cellCoords(hero.position);
+  let best = null;
+  let bestD = Infinity;
+  for (const c of game.garden.cells) {
+    if (isBasket(c)) continue;
+    const d = Math.hypot(c.x - at.x, c.z - at.z);
+    if (d < bestD) { best = c; bestD = d; }
+  }
+  return best;
+}
+const GLINT_EVERY = 1.2; // раз во сколько секунд поблёскивает одно из спелых растений
+let glintTimer = GLINT_EVERY;
+
 // ---------- Игровой цикл ----------
 // Где растут спелые светящиеся грибы — над ними поднимаются споры
 function ripeMushrooms() {
@@ -483,6 +511,7 @@ function frame(now) {
     attacks.update(dt);
     embers.update(dt, now / 1000, hero.position, game.perks().emberPull ?? undefined);
   }
+  popups.update(dt);
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
@@ -494,6 +523,15 @@ function frame(now) {
   gardenView.setShine(lamps); // мокрые грядки блестят при фонарях (каждый кадр: текстура могла догрузиться позже)
   decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
   if (frameCount % 30 === 0) updatePollen();
+  if (frameCount % 20 === 0) gardenView.setGuide(guideCell());
+  gardenView.pulse(now / 1000);
+  glintTimer -= dt;
+  if (glintTimer <= 0 && !menu.isOpen) { // днём спелые изредка поблёскивают
+    glintTimer = GLINT_EVERY;
+    const ripe = lamps < 0.5 ? game.ripeCells() : [];
+    const c = ripe[Math.floor(Math.random() * ripe.length)];
+    if (c) effects.glint(cellToWorld(c.x, c.z));
+  }
   effects.update(dt, { ripeMushrooms: ripeMushrooms(), pollenPairs, visibility: 1 - weather.wetness, lamps });
   island.update(now / 1000);
   fogSea.update(dt, lamps);

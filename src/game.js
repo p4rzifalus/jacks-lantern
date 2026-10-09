@@ -22,9 +22,10 @@ export const isBasket = (c) => c.x === BASKET_CELL.x && c.z === BASKET_CELL.z;
 // Цена урожая: вялый (отстоял ночь на страже) — дешевле
 const priceOf = ({ type, wilted }) => (wilted ? Math.ceil(PLANTS[type].sellPrice * WILTED_SELL_SHARE) : PLANTS[type].sellPrice);
 
-// onHint(text, ms) — показать подсказку; onEffect(name, cell, earned) — для красоты (брызги, искры; earned — выручка при продаже);
+// onRefuse(icon) — так нельзя: енот думает значком (icon — из ui.js → PIXEL_ICONS: 'drop' — уже полито, 'clock' — ещё растёт…);
+// onEffect(name, cell, extra) — для красоты (брызги, искры; extra — выручка при продаже, сколько семян и т. п.);
 // onChange() — что-то поменялось: обновить интерфейс и сохранить
-export function createGame({ onHint, onEffect, onChange }) {
+export function createGame({ onRefuse, onEffect, onChange }) {
   const garden = new GardenState();
   const state = {
     tool: 'seeds',
@@ -120,22 +121,22 @@ export function createGame({ onHint, onEffect, onChange }) {
     const stage = garden.stage(c);
 
     if (state.tool === 'seeds') {
-      if (stage !== EMPTY) return onHint('Здесь уже посажено');
-      if (seedCount(state.selectedSeed) <= 0) return onHint('Семена кончились — купи в магазине');
+      if (stage !== EMPTY) return onRefuse('seeds');                 // уже посажено
+      if (seedCount(state.selectedSeed) <= 0) return onRefuse('bagEmpty'); // семена кончились
       garden.plant(c, state.selectedSeed);
       if (!isFree(state.selectedSeed)) state.seeds[state.selectedSeed]--;
       onEffect('planted', c);
     } else if (state.tool === 'water') {
       const dry = wateredCells(c, facing).filter((n) => !garden.isWet(n));
-      if (!dry.length) return onHint(stage === EMPTY ? 'Уже полито — можно сажать' : 'Уже полито — растёт');
+      if (!dry.length) return onRefuse('drop');                       // уже полито
       for (const n of dry) {
         garden.water(n);
         onEffect('watered', n);
       }
     } else if (state.tool === 'basket') {
-      if (stage === EMPTY) return onHint('Здесь пусто');
-      if (stage !== RIPE) return onHint(garden.isWet(c) ? 'Ещё растёт' : 'Сначала полей');
-      if (state.carried.length >= capacity()) return onHint('Корзинка полна — отнеси урожай к большой корзине в центре огорода');
+      if (stage === EMPTY) return onRefuse('hole');                   // пусто
+      if (stage !== RIPE) return onRefuse(garden.isWet(c) ? 'clock' : 'dropEmpty'); // ещё растёт / сначала полей
+      if (state.carried.length >= capacity()) return onRefuse('basketFull'); // корзинка полна — к большой корзине
       const cell = garden.cell(c);
       const wilted = cell.nights > 0;
       const dry = garden.isDry(c);
@@ -147,20 +148,19 @@ export function createGame({ onHint, onEffect, onChange }) {
         const [min, max] = PLANTS[type].defense.seeds;
         const seeds = isFree(type) ? 0 : min + Math.floor(Math.random() * (max - min + 1));
         if (seeds) state.seeds[type] = (state.seeds[type] || 0) + seeds;
-        onHint(`Сухой — продастся за полцены${seeds ? `, +${plural(seeds, ['семя', 'семени', 'семян'])}` : ''}`);
+        if (seeds) onEffect('seeds', c, seeds); // над грядкой выскакивают семечки
       } else if (hybrid) {
         const first = !state.discovered.includes(hybrid);
         if (first) state.discovered.push(hybrid);
         state.seeds[hybrid] = (state.seeds[hybrid] || 0) + 1;
         onEffect('hybrid', c, { type: hybrid, first });
-        onHint(first ? `Новое растение — ${PLANTS[hybrid].name}! Семя уже в мешочке` : `+1 семя: ${PLANTS[hybrid].name}`, first ? 4000 : 2000);
-      } else if (wilted) onHint('Вялый — отстоял ночь на страже, продастся за полцены');
+      }
     }
   }
 
   // Большая корзина в центре огорода превращает урожай в монеты: всё из корзинки для сбора — разом
   function putInBasket() {
-    if (!state.carried.length) return onHint('Корзинка пуста — сначала собери урожай');
+    if (!state.carried.length) return onRefuse('basket');            // корзинка пуста
     const lockedBefore = PLANT_TYPES.filter((t) => !isUnlocked(t));
 
     let earned = 0;
@@ -173,9 +173,7 @@ export function createGame({ onHint, onEffect, onChange }) {
     onEffect('sold', BASKET_CELL, earned);
 
     const opened = lockedBefore.filter(isUnlocked);
-    if (opened.length) onEffect('unlocked', BASKET_CELL);
-    if (opened.length) onHint(`Новые семена в магазине: ${opened.map((t) => PLANTS[t].name).join(', ')}!`, 3500);
-    else onHint(`+${earned} мон.`);
+    if (opened.length) onEffect('unlocked', BASKET_CELL, opened); // мешочек семян летит к магазину
   }
 
   return {
@@ -318,6 +316,9 @@ export function createGame({ onHint, onEffect, onChange }) {
         embers: state.embers,
         shopOpen: state.shopOpen,
         herbariumOpen: state.herbariumOpen,
+        // магазин зовёт: монет хватает на семена, которых ещё ни разу не покупал
+        shopBeckon: PLANT_TYPES.some((type) => !isHybrid(type) && !isFree(type) && isUnlocked(type)
+          && !(type in state.seeds) && state.coins >= PLANTS[type].seedPrice),
         carried: state.carried,
         capacity: capacity(),
         upgrades: UPGRADES.map((branch) => ({
