@@ -188,6 +188,13 @@ export function createSfx(engine) {
       }
     },
 
+    // Джек печатает реплику: тихий сухой щелчок клавиши, каждый чуть другой
+    typeKey() {
+      if (!ready()) return;
+      noise(engine, FX, { type: 'bandpass', freq: rand(2600, 3800), q: 3, gain: rand(0.035, 0.05), attack: 0.001, decay: rand(0.012, 0.02) });
+      tone(engine, FX, { freq: rand(900, 1300), type: 'triangle', gain: 0.012, decay: 0.02 });
+    },
+
     // Кнопки: тихий деревянный щелчок
     click() {
       if (!ready()) return;

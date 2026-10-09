@@ -1,6 +1,6 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
-import { HERO_START, BASKET_CELL, PLANTS, GROWTH_SPEED } from './config.js';
+import { HERO_START, BASKET_CELL, PLANTS, GROWTH_SPEED, JACK } from './config.js';
 import { cellToWorld, worldToCell, cellCoords, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
 import { RIPE } from './garden.js';
@@ -28,7 +28,9 @@ import { createSound } from './audio/index.js';
 import { createDaytime } from './daytime.js';
 import { createDayNight } from './render/day-night.js';
 import { setLampLevel } from './render/glow.js';
-import { createNight, morningReport } from './night.js';
+import { createNight } from './night.js';
+import { createJack } from './jack.js';
+import { morningLine } from './lines.js';
 import { createEmbers } from './world/embers.js';
 import { createAttacks } from './world/attacks.js';
 import { createSpirits } from './world/spirits.js';
@@ -52,6 +54,8 @@ const daytime = createDaytime(); // часы суток: новая игра —
 const dayNight = createDayNight({ renderer, scene, lighting, pipeline, weather, daytime }); // как выглядит время суток
 // Панель настройки (G) — только при разработке; в опубликованной игре её нет
 const sound = createSound();
+// Фонарь Джек — рассказчик: реплики внизу экрана (тексты — lines.js)
+const jack = createJack({ onType: () => sound.typeKey() });
 const devPanel = import.meta.env.DEV ? createDevPanel(fx, pipeline, quality, weather, sound.engine, () => hero, fogSea, { daytime, dayNight, spawnSpirit: () => night.spawnNow(), ripenAll }) : null;
 
 // ---------- Правила ----------
@@ -63,7 +67,10 @@ const game = createGame({
     sound.deny();
     hero.shake();
     popups.think(icon, () => hero.headPoint);
-    if (icon === 'bagEmpty') ui.beckonShop(); // семена кончились — магазин зовёт
+    if (icon === 'bagEmpty') { // семена кончились — магазин зовёт
+      ui.beckonShop();
+      jack.first('noSeeds');
+    }
   },
   onEffect(name, cell, extra) {
     const at = cellToWorld(cell.x, cell.z);
@@ -79,6 +86,7 @@ const game = createGame({
     if (name === 'watered') effects.water(hero.frontPoint.lerp(hero.position, 0.4), at);
     if (name === 'harvested') effects.sparkle(at);
     if (name === 'sold') {
+      jack.first('firstSale');
       effects.coins(at);
       popups.float(at.clone().setY(0.9), `+${extra}`, 'coin');
     }
@@ -92,6 +100,7 @@ function discovered(cell, { type, first }) {
   sound.hybrid(first);
   effects.discovery(cellToWorld(cell.x, cell.z), first);
   if (!first) popups.float(cellToWorld(cell.x, cell.z).setY(0.6), '+1', 'seeds');
+  else jack.first('firstHybrid');
   if (first) setTimeout(() => menu.showDiscovery(discoveryCard(type)), 900);
 }
 
@@ -148,9 +157,14 @@ const night = createNight({
     spirits.warn(from);
     sound.spiritAppear();
   },
-  onSpawn: (spirit) => spirits.add(spirit),
+  onSpawn(spirit) {
+    spirits.add(spirit);
+    if (spirit.kind === 'skeleton') jack.first('firstSkeleton');
+    else if (spirit.kind === 'ghost') jack.first('firstGhost');
+  },
   // растения бьют духов: как выглядит — world/attacks.js
   onAttack(event) {
+    jack.first('plantHit');
     attacks.show(event);
     gardenView.strike(event.from); // растение замахивается и бьёт
     if (event.type === 'wall') for (const s of event.targets) spirits.knock(s, 0.5); // тыква отталкивает на полклетки
@@ -160,17 +174,18 @@ const night = createNight({
     attacks.hit(spirit);
     sound.spiritHit();
   },
+  onStolen: () => jack.first('firstStolen'),
   onMorning(summary) {
     spirits.dawn();
     embers.dawn(); // несобранные огоньки сами летят в счётчик
-    const rows = morningReport(summary);
-    if (rows) menu.showMorning(rows); // утром — окно с итогом ночи (если что-то было)
+    jack.say(morningLine(summary)); // Джек подводит итог ночи
   },
 });
 // Огоньки от прогнанных духов: енот подбирает, проходя рядом
 const embers = createEmbers(scene, {
   onCollect(at) {
     game.addEmbers(1);
+    jack.first('firstEmber');
     sound.emberPicked();
     effects.sparkle(at);
   },
@@ -183,7 +198,8 @@ const spirits = createSpirits(scene, camera, landmarks.island, night, {
   },
   onLeave: () => sound.spiritLeave(),
   // испугался: вспышка у растения, которое напугало, огонёк на месте духа; добыча вернулась
-  onScared(spirit, at, from, returned) {
+  onScared(spirit, at, from) {
+    jack.first('firstScared');
     sound.spiritScared();
     if (from) effects.sparkle(cellToWorld(from.x, from.z));
     embers.add(at);
@@ -250,10 +266,24 @@ const ui = createUI({
   onMenu: () => menu.toggle(),
 });
 
+// Сохранение сделано до появления Джека: какие «первые события» игрок уже точно пережил
+function alreadyKnown() {
+  const { state } = game;
+  const known = [];
+  if (Object.keys(state.harvested).length) known.push('start', 'thirsty', 'firstRipe', 'basketFull', 'firstSale');
+  if (state.nightsSeen > 0) known.push('evening', 'firstGhost', 'firstScared', 'firstEmber', 'plantHit', 'firstStolen');
+  if (state.nightsSeen > 2) known.push('firstSkeleton');
+  if (state.discovered.length) known.push('firstHybrid');
+  if (state.upgrades.length) known.push('canUpgrade');
+  return known;
+}
+
 // Загрузка сохранения. Растения «досчитываются» сами: стадия считается от момента полива.
 const saved = loadGame();
 if (saved) {
   game.load(saved);
+  if (saved.jack) jack.load(saved.jack);
+  else jack.load(alreadyKnown()); // сохранение до Джека: то, что игрок уже прошёл, не объясняем
   const pos = saved.hero || saved.mole; // в старых сохранениях место героя записано как «mole»
   if (pos) {
     const num = (n) => (Number.isFinite(n) ? n : 0); // файл могли поправить руками
@@ -283,7 +313,7 @@ function refresh() {
 // ---------- Сохранение ----------
 // Всё, что сохраняем (в браузер и в файл): огород, монеты, семена, где стоит герой, ракурс камеры
 function snapshot() {
-  return { ...game.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
+  return { ...game.toSave(), jack: jack.toSave(), hero: { x: hero.position.x, z: hero.position.z, heading: hero.heading },
     view: { turn: cameraControl.turn, closeUp: cameraControl.isCloseUp }, daytime: daytime.time };
 }
 
@@ -411,6 +441,26 @@ function guideCell() {
   }
   return best;
 }
+// ---------- Когда говорит Джек ----------
+// Раз в полсекунды проверяем, не случилось ли что-то впервые; и изредка — атмосферная реплика
+let jackCheck = 0;
+function watchForJack(dt) {
+  const phase = daytime.phase().id;
+  jack.ambient(weather.raining ? 'rain' : night.threat ? null : phase, dt);
+  if ((jackCheck -= dt) > 0) return;
+  jackCheck = 0.5;
+  const { state, garden } = game;
+  if (guideCell()) jack.first('start'); // новая игра: огород пуст
+  const now = Date.now();
+  if (garden.cells.some((c) => c.plant && garden.stage(c) === 0 && !garden.isWet(c) && now - c.plantedAt > JACK.thirstySeconds * 1000)) jack.first('thirsty');
+  if (game.ripeCells().length) jack.first('firstRipe');
+  const view = game.view();
+  if (view.carried.length >= view.capacity) jack.first('basketFull');
+  if (phase === 'evening') jack.first('evening');
+  if (weather.raining) jack.first('rain');
+  if (view.upgrades.some((b) => b.steps.some((st) => st.available && st.price <= state.embers))) jack.first('canUpgrade');
+}
+
 const GLINT_EVERY = 1.2; // раз во сколько секунд поблёскивает одно из спелых растений
 let glintTimer = GLINT_EVERY;
 
@@ -512,6 +562,8 @@ function frame(now) {
     embers.update(dt, now / 1000, hero.position, game.perks().emberPull ?? undefined);
   }
   popups.update(dt);
+  jack.update(dt, menu.isOpen || game.state.shopOpen || game.state.herbariumOpen);
+  if (!menu.isOpen) watchForJack(dt);
   dayNight.update();
   lightRays.update(now / 1000, camera, { amount: dayNight.state.rays, moonlight: dayNight.state.moonlight });
   if (++daytimeFrame % 30 === 0) ui.setDaytime(daytime.phase());
@@ -556,7 +608,7 @@ function frame(now) {
 // Только для разработки: доступ к игре из консоли браузера (game.restart() — начать заново)
 if (import.meta.env.DEV) {
   window.game = {
-    game, hero, camera, scene, restart, sound, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers, attacks, gardenView,
+    game, hero, camera, scene, restart, sound, jack, quality, pipeline, renderer, weather, effects, decor, cameraControl, fogSea, daytime, dayNight, night, spirits, embers, attacks, gardenView,
     // крупный план: game.closeUp(x, y, z, ширина) ; game.closeUp() — вернуть обычный вид
     closeUp(x, y, z, size) { cameraControl.closeUp(x === undefined ? null : new THREE.Vector3(x, y, z), size); },
     garden: game.garden,

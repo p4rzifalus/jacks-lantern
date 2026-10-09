@@ -207,6 +207,20 @@
       .fly-seed { position: fixed; color: var(--amber); pointer-events: none; transition: transform 0.9s cubic-bezier(0.5, -0.4, 0.6, 1), opacity 0.9s; }
       .fly-seed .pixel-icon { width: 28px; height: 28px; fill: currentColor; filter: drop-shadow(0 0 6px var(--amber)); }
 
+      /* Реплика Джека: внизу, над панелью инструментов (или над рядом семян), печатается по буквам */
+      .jack {
+        position: fixed; left: 50%; bottom: 110px; transform: translate(-50%, 8px); opacity: 0;
+        width: max-content; max-width: min(560px, calc(100vw - 32px)); padding: 8px 16px 10px;
+        background: var(--glass-strong); border: 1px solid var(--edge); border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); cursor: pointer; pointer-events: none;
+        transition: opacity 0.25s, transform 0.25s;
+      }
+      .jack.visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+      .jack.paused { opacity: 0; pointer-events: none; }
+      .jack-name { font-size: 18px; color: var(--amber); line-height: 1.1; }
+      .jack-text { font-size: 14px; color: var(--text); line-height: 1.45; min-height: 1.45em; }
+      .jack-rest { visibility: hidden; }
+
       /* Меню и камера — в левом верхнем углу */
       .corner-bar { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; }
       .corner-bar button {
@@ -234,7 +248,7 @@
       }
       .menu-backdrop.visible { display: flex; }
       body.intro .menu-backdrop { background: radial-gradient(ellipse at center, rgba(12, 10, 20, 0.25), rgba(12, 10, 20, 0.7)); }
-      body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .popups { display: none; }
+      body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-bar, body.intro .popups, body.intro .jack { display: none; }
       .menu {
         width: 100%; max-width: 380px; max-height: 100%; overflow-y: auto; padding: 18px;
         background: var(--glass-strong); box-sizing: border-box;

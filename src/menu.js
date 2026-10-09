@@ -26,7 +26,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   backdrop.appendChild(card);
   document.body.appendChild(backdrop);
 
-  let screen = null; // 'start' | 'menu' | 'morning' | 'discovery' | null
+  let screen = null; // 'start' | 'menu' | 'discovery' | null
   let busy = false;  // идёт работа с файлом — повторные нажатия не нужны
 
   const setScreen = (name) => {
@@ -146,12 +146,6 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
         <div class="menu-title title">${escapeHtml(data.name)}</div>
         <div class="menu-report">${data.rows.map(([label, value]) => `<div><span>${label}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div>
         <div class="menu-buttons"><button class="primary" data-act="close">Чудесно</button></div>`;
-    } else if (name === 'morning') {
-      // утро после ночи: что было
-      card.innerHTML = `
-        <div class="menu-title title">Ночь прошла</div>
-        <div class="menu-report">${data.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}</div>
-        <div class="menu-buttons"><button class="primary" data-act="close">Доброе утро</button></div>`;
     } else if (name === 'start') {
       card.innerHTML = `
         <div class="menu-title title">Осенняя ферма</div>
@@ -199,7 +193,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
   });
   // клик мимо окна закрывает меню (но не стартовый экран)
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop && (screen === 'menu' || screen === 'morning' || screen === 'discovery')) close();
+    if (e.target === backdrop && (screen === 'menu' || screen === 'discovery')) close();
   });
   // звук переключили клавишами N / M — обновить кнопки
   engine.onChange(() => {
@@ -223,17 +217,13 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     get isOpen() { return !!screen; },
     get isStart() { return screen === 'start'; },
     showStart: () => render('start'),
-    // Утреннее окно с итогом ночи (rows — из morningReport)
-    showMorning(rows) {
-      if (!screen) render('morning', rows);
-    },
     // Окно «новое растение»: { name, image (адрес картинки), rows: [подпись, значение] }
     showDiscovery(data) {
       if (!screen) render('discovery', data);
     },
     open: () => render('menu'),
     close() {
-      if (screen === 'menu' || screen === 'morning' || screen === 'discovery') close(); // стартовый экран закрывается только кнопками
+      if (screen === 'menu' || screen === 'discovery') close(); // стартовый экран закрывается только кнопками
     },
     toggle() {
       if (screen === 'menu') close();

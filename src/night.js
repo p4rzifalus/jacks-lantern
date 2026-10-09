@@ -1,20 +1,15 @@
 // Ночь — только правила: сколько духов приходит и откуда, к чему идут, что пропадает,
-// какие растения (и фонарь енота) по кому бьют и когда дух пугается, что сказать утром.
+// какие растения (и фонарь енота) по кому бьют и когда дух пугается.
 // Координаты — в клетках огорода (дробные числа); корзина — в центральной клетке (BASKET_CELL).
 // Как духи выглядят и двигаются — world/spirits.js. Числа — config.js → SPIRITS, NIGHTS, LANTERN.
 // Набеги идут только во время игры: часы суток стоят, пока игра закрыта или открыто меню.
 import { SPIRITS, PLANTS, GARDEN_SIZE, NIGHTS, NIGHT_GROWTH, NIGHT_SCALING, LANTERN, DAY_CYCLE } from './config.js';
-import { countOf } from './game.js';
-import { plural } from './text.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
 // Стороны острова, откуда поднимаются духи, — в порядке, в котором они «открываются» от ночи к ночи:
 // сначала с ближнего к зрителю края (там, где появляется енот), потом сбоку, в конце — из-за дома
 export const SIDES = ['south', 'east', 'west', 'north'];
-
-// «1 монету», «3 монеты», «12 монет»
-export const coinsOf = (n) => plural(n, ['монету', 'монеты', 'монет']);
 
 // Какая по счёту ночь (0 — первая) → { spirits, kinds, sides }. После списка — как последняя, но духов больше
 export function nightPlan(index) {
@@ -55,26 +50,12 @@ const onField = (s) => s.at && !s.fled && s.courage > 0
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
-// «морковь ×2, редис — собери за полцены»
-function drySummary(types) {
-  const counts = {};
-  for (const t of types) counts[t] = (counts[t] || 0) + 1;
-  const list = Object.entries(counts).map(([t, n]) => `${PLANTS[t].name.toLowerCase()}${n > 1 ? ` ×${n}` : ''}`);
-  return `${list.join(', ')} — собери за полцены`;
-}
-
-// Итог ночи для утреннего окна: строки [подпись, значение]; null — ночь прошла тихо, показывать нечего
-export function morningReport({ scared, lost, faded }) {
-  const gone = Object.entries(lost.crops).filter(([, n]) => n > 0).map(([type, n]) => countOf(type, n));
-  if (lost.coins) gone.push(coinsOf(lost.coins));
-  if (!scared && !gone.length && !faded.length) return null;
-  const rows = [
-    ['Прогнано духов', String(scared)],
-    ['Огоньков', `+${scared}`],
-    ['Унесли', gone.length ? gone.join(', ') : 'ничего'],
-  ];
-  if (faded.length) rows.push(['Засохли', drySummary(faded)]);
-  return rows;
+// Ближайшая к точке сторона острова ('south' — +z, 'east' — +x)
+function nearestSide({ x, z }) {
+  const dx = x - (GARDEN_SIZE - 1) / 2;
+  const dz = z - (GARDEN_SIZE - 1) / 2;
+  if (Math.abs(dx) > Math.abs(dz)) return dx > 0 ? 'east' : 'west';
+  return dz > 0 ? 'south' : 'north';
 }
 
 // onWarn(from) — скоро поднимется дух: from = { side, t } — сторона острова и место вдоль неё (0..1)
@@ -83,7 +64,7 @@ export function morningReport({ scared, lost, faded }) {
 // onAttack({ type, reach, from, targets, delay }) — растение с клетки from ударило; delay — через сколько секунд удар долетит
 // onHit(spirit, from) — удар попал, смелость убавилась (на нуле spirit.courage <= 0 — дух испугался, убегает картинка)
 // onStolen(spirit, loot) — дух что-то унёс: loot { crop } или { coins }
-// onMorning(summary) — ночь кончилась: { scared, lost, faded } (строки для окна — morningReport)
+// onMorning(summary) — ночь кончилась: { scared, lost, faded } (утренняя реплика Джека — lines.js → morningLine)
 export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, onStolen, onMorning }) {
   let active = false;
   let bravery = 1;    // во сколько раз духи этой ночи смелее обычного (NIGHT_SCALING)
@@ -174,7 +155,8 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
   }
 
   // Расписание ночи: духи приходят по одному, через примерно равные промежутки (чуть случайно, чтобы не по часам)
-  function startNight() {
+  // heroAt — где енот (клетки): первая ночь приходит с той стороны острова, где он стоит, — чтобы встреча случилась сама
+  function startNight(heroAt) {
     active = true;
     reset();
     clock = 0;
@@ -184,7 +166,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     const extra = Math.min(NIGHT_SCALING.maxExtra, Math.floor(guards / NIGHT_SCALING.plantsPerSpirit));
     bravery = Math.min(NIGHT_SCALING.maxCourage, 1 + guards * NIGHT_SCALING.couragePerPlant);
     plan = { ...plan, spirits: plan.spirits + extra };
-    const sides = SIDES.slice(0, plan.sides);
+    const sides = game.state.nightsSeen === 0 && heroAt ? [nearestSide(heroAt)] : SIDES.slice(0, plan.sides);
     const nightSeconds = (DAY_CYCLE.phases.find((p) => p.id === 'night').minutes * 60) / DAY_CYCLE.speed;
     const gap = (nightSeconds * SPIRITS.spread - SPIRITS.firstDelay) / plan.spirits;
     queue = [];
@@ -231,7 +213,7 @@ export function createNight({ game, daytime, onWarn, onSpawn, onAttack, onHit, o
     // heroAt — где енот (в клетках): его фонарь горит ночью
     update(dt, heroAt = null) {
       const phase = daytime.phase();
-      if (phase.id === 'night' && !active) startNight();
+      if (phase.id === 'night' && !active) startNight(heroAt);
       if (phase.id !== 'night' && active) endNight();
       for (const w of [...warned]) {
         w.t -= dt;
