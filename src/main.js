@@ -1,9 +1,8 @@
 // Точка входа: собираем правила игры (game.js), картинку и управление, запускаем игровой цикл.
 import * as THREE from 'three';
-import { HERO_START, BASKET_CELL, PLANTS, GROWTH_SPEED, JACK } from './config.js';
+import { HERO_START, BASKET_CELL, PLANTS, JACK } from './config.js';
 import { cellToWorld, worldToCell, cellCoords, isInGarden, findPathTo, findPathToNeighbor } from './grid.js';
 import { createGame, isBasket } from './game.js';
-import { RIPE } from './garden.js';
 import { createScene, createHoverFrame, createFrontMarker } from './scene.js';
 import { Hero } from './hero.js';
 import { GardenView } from './world/garden-view.js';
@@ -37,7 +36,6 @@ import { createSpirits } from './world/spirits.js';
 import { Sprite } from './render/sprites.js';
 import { getSheets } from './world/sheets.js';
 import { PLANT_ORDER, PLANT_FRAME } from './art/sprite-art.js';
-import { formatTime } from './text.js';
 
 const quality = detectQuality();
 setTextureLimit(quality.textureSize); // на слабом качестве картинки уменьшаются при загрузке
@@ -118,20 +116,10 @@ function plantImage(type) {
   return plantImages[type];
 }
 
-// Окно открытия: картинка спелого растения (из листа растений), от кого выведено, что умеет
+// Окно открытия: картинка спелого растения и картинки родителей
 function discoveryCard(type) {
   const p = PLANTS[type];
-  const [a, b] = p.hybrid.map((t) => PLANTS[t].name.toLowerCase());
-  return {
-    name: p.name,
-    image: plantImage(type),
-    rows: [
-      ['Выведено из', `${a} и ${b}`],
-      ['Растёт', formatTime((p.stageSeconds * RIPE) / (GROWTH_SPEED * game.garden.growth))],
-      ['Урожай', `${p.sellPrice} мон.`],
-      ['Ночью', p.defense.role],
-    ],
-  };
+  return { name: p.name, image: plantImage(type), parents: p.hybrid.map(plantImage) };
 }
 
 // ---------- Картинка ----------
@@ -174,7 +162,11 @@ const night = createNight({
     attacks.hit(spirit);
     sound.spiritHit();
   },
-  onStolen: () => jack.first('firstStolen'),
+  // дух унёс урожай или монеты: на этом месте остаётся светящийся след до полудня
+  onStolen(spirit, loot) {
+    jack.first('firstStolen');
+    gardenView.trail(loot.crop ? spirit.target.cell : BASKET_CELL);
+  },
   onMorning(summary) {
     spirits.dawn();
     embers.dawn(); // несобранные огоньки сами летят в счётчик
@@ -576,7 +568,7 @@ function frame(now) {
   decor.fireflyVisibility = (1 - weather.wetness) * lamps; // светлячки — вечером и ночью, в дождь прячутся
   if (frameCount % 30 === 0) updatePollen();
   if (frameCount % 20 === 0) gardenView.setGuide(guideCell());
-  gardenView.pulse(now / 1000);
+  gardenView.pulse(now / 1000, menu.isOpen ? 0 : dt);
   glintTimer -= dt;
   if (glintTimer <= 0 && !menu.isOpen) { // днём спелые изредка поблёскивают
     glintTimer = GLINT_EVERY;

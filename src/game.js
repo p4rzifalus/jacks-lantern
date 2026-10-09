@@ -3,7 +3,6 @@
 import { PLANTS, BASKET_CELL, HAND_BASKET, UPGRADES, GROWTH_SPEED, WILTED_SELL_SHARE, WEATHER, CROSSING } from './config.js';
 import { isInGarden } from './grid.js';
 import { GardenState, EMPTY, RIPE } from './garden.js';
-import { plural } from './text.js';
 
 export const TOOL_IDS = ['seeds', 'water', 'basket'];
 const PLANT_TYPES = Object.keys(PLANTS);
@@ -14,8 +13,6 @@ const NEIGHBORS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const STEPS = UPGRADES.flatMap((branch) => branch.steps.map((step, i) => ({ ...step, branch, index: i })));
 const stepById = (id) => STEPS.find((s) => s.id === id);
 
-// «5 морковок», «3 тыквы», «1 гриб»
-export const countOf = (type, n) => plural(n, PLANTS[type].forms);
 
 export const isBasket = (c) => c.x === BASKET_CELL.x && c.z === BASKET_CELL.z;
 
@@ -86,9 +83,18 @@ export function createGame({ onRefuse, onEffect, onChange }) {
     return cells.filter((n) => isInGarden(n) && !isBasket(n));
   }
 
-  // Выбранные семена кончились или ещё не открыты — берём бесплатные
+  // Лучшие из обычных семян, что есть в мешочке: самые поздние по списку PLANTS (подсолнух лучше тыквы, тыква — редиса…).
+  // Гибриды сами в лапы не попадают — их семена редкие, сажать их стоит осознанно
+  const bestSeed = () => [...PLANT_TYPES].reverse().find((t) => !isHybrid(t) && isUnlocked(t) && seedCount(t) > 0) || 'carrot';
+
+  // Выбранные семена кончились или ещё не открыты — берём лучшие из оставшихся.
+  // Морковь «по умолчанию» (не выбранную руками) меняем на лучшие, как только они появились
+  let chosenByHand = false;
   function checkSelectedSeed() {
-    if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) state.selectedSeed = 'carrot';
+    if (seedCount(state.selectedSeed) <= 0 || !isUnlocked(state.selectedSeed)) {
+      state.selectedSeed = bestSeed();
+      chosenByHand = false;
+    } else if (!chosenByHand && state.selectedSeed === 'carrot') state.selectedSeed = bestSeed();
   }
 
   // Скрещивание: какой гибрид может получиться при сборе растения type с клетки c — от спелых соседей подходящего вида
@@ -106,6 +112,21 @@ export function createGame({ onRefuse, onEffect, onChange }) {
     }
     if (!options.length || Math.random() >= perk('crossing', CROSSING.chance)) return null;
     return options[Math.floor(Math.random() * options.length)];
+  }
+
+  // Что показать о растении в магазине и гербарии: рост, цены, как защищает ночью
+  function plantInfo(type) {
+    const p = PLANTS[type];
+    return {
+      type,
+      name: p.name,
+      sellPrice: p.sellPrice,
+      wiltedPrice: priceOf({ type, wilted: true }),
+      growSeconds: (p.stageSeconds * RIPE) / (GROWTH_SPEED * garden.growth),
+      attack: { type: p.attack.type, reach: p.attack.reach },
+      nights: p.defense.nights + garden.extraNights,
+      role: p.defense.role,
+    };
   }
 
   let rainCarry = 0; // доли грядки, которые дождь «намочил» между кадрами
@@ -191,6 +212,7 @@ export function createGame({ onRefuse, onEffect, onChange }) {
     },
     selectSeed(type) {
       state.selectedSeed = type;
+      chosenByHand = true;
       changed();
     },
     toggleShop(open = !state.shopOpen) {
@@ -324,7 +346,7 @@ export function createGame({ onRefuse, onEffect, onChange }) {
         upgrades: UPGRADES.map((branch) => ({
           name: branch.name,
           steps: branch.steps.map((step) => ({
-            id: step.id, name: step.name, text: step.text, price: step.price,
+            id: step.id, name: step.name, text: step.text, about: step.about, price: step.price,
             owned: owns(step.id),
             available: canUpgrade(stepById(step.id)),
           })),
@@ -334,16 +356,7 @@ export function createGame({ onRefuse, onEffect, onChange }) {
           const p = PLANTS[type];
           // собрано: отнесено к большой корзине и ещё лежит в корзинке для сбора
           const harvested = (state.harvested[type] || 0) + state.carried.filter((item) => item.type === type).length;
-          return {
-            type,
-            name: p.name,
-            open: harvested > 0,
-            harvested,
-            sellPrice: p.sellPrice,
-            growSeconds: (p.stageSeconds * RIPE) / (GROWTH_SPEED * garden.growth),
-            role: p.defense.role,
-            parents: p.hybrid ? p.hybrid.map((t) => PLANTS[t].name.toLowerCase()) : null,
-          };
+          return { ...plantInfo(type), open: harvested > 0, harvested, parents: p.hybrid || null };
         }),
         selectedSeed: state.selectedSeed,
         seedOptions: PLANT_TYPES
@@ -353,16 +366,12 @@ export function createGame({ onRefuse, onEffect, onChange }) {
           const p = PLANTS[type];
           const unlock = p.unlock;
           return {
-            type,
-            name: p.name,
+            ...plantInfo(type),
             unlocked: isUnlocked(type),
             seedPrice: p.seedPrice,
-            defense: { ...p.defense, nights: p.defense.nights + garden.extraNights },
-            sellPrice: p.sellPrice,
-            wiltedPrice: priceOf({ type, wilted: true }),
-            growSeconds: (p.stageSeconds * RIPE) / (GROWTH_SPEED * garden.growth),
             owned: seedCount(type),
-            condition: unlock && `собери ${countOf(unlock.plant, unlock.count)} (есть ${state.harvested[unlock.plant] || 0})`,
+            // чтобы открыть: собрать count растений plant, уже собрано have
+            unlock: unlock && { plant: unlock.plant, count: unlock.count, have: Math.min(unlock.count, state.harvested[unlock.plant] || 0) },
           };
         }),
       };

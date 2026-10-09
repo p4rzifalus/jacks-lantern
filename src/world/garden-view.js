@@ -33,15 +33,19 @@ function glowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-function glowSpot(size) {
+const glowMap = glowTexture();
+function glowSpot(size, color = GUIDE_COLOR) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: glowTexture(), color: GUIDE_COLOR, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: glowMap, color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   mesh.visible = false;
   return mesh;
 }
 const GUIDE_COLOR = '#ffc46a';
+// След духа: где ночью что-то унесли — бледное голубое свечение на земле, тает за TRAIL_SECONDS (примерно к полудню)
+const TRAIL_COLOR = '#8fb8ff';
+const TRAIL_SECONDS = 150;
 
 // У каждой грядки свой кусок текстуры (сдвиг и разворот на 180°), чтобы рисунок земли не повторялся клетка в клетку.
 // Борозды остаются в одну сторону
@@ -97,6 +101,25 @@ export class GardenView {
     const b = cellToWorld(BASKET_CELL.x, BASKET_CELL.z);
     this.basketCall.position.set(b.x, 0.05, b.z);
     scene.add(this.guide, this.basketCall);
+    this.scene = scene;
+    this.trails = new Map(); // «x,z» → { mesh, t, cell }
+  }
+
+  // Дух унёс что-то с клетки c (или из корзины): на земле остаётся светящийся след
+  trail(c) {
+    const key = `${c.x},${c.z}`;
+    let tr = this.trails.get(key);
+    if (!tr) {
+      const basket = c.x === BASKET_CELL.x && c.z === BASKET_CELL.z;
+      const mesh = glowSpot(CELL_SIZE * (basket ? 2 : 1.2), TRAIL_COLOR);
+      const p = cellToWorld(c.x, c.z);
+      mesh.position.set(p.x, 0.05, p.z);
+      mesh.visible = true;
+      this.scene.add(mesh);
+      tr = { mesh, cell: c, basket };
+      this.trails.set(key, tr);
+    }
+    tr.t = TRAIL_SECONDS;
   }
 
   // Подсветить грядку c (null — убрать): мягко пульсирует, пока на ней ничего не сделали
@@ -113,8 +136,20 @@ export class GardenView {
     this.basketCall.visible = on;
   }
 
-  // Пульс подсветок (каждый кадр)
-  pulse(time) {
+  // Пульс подсветок и таяние следов духов (каждый кадр)
+  pulse(time, dt = 0) {
+    for (const [key, tr] of this.trails) {
+      tr.t -= dt;
+      if (tr.t <= 0) {
+        this.scene.remove(tr.mesh);
+        this.trails.delete(key);
+        continue;
+      }
+      // на грядку вернули урожай (дух уронил) или посадили новое — след не нужен
+      const covered = !tr.basket && this.garden.cell(tr.cell).plant;
+      tr.mesh.visible = !covered;
+      tr.mesh.material.opacity = 0.5 * Math.min(1, tr.t / 30) * (0.8 + 0.2 * Math.sin(time * 1.5 + tr.cell.x));
+    }
     const k = 0.5 + 0.5 * Math.sin(time * 3);
     this.guide.material.opacity = 0.25 + 0.35 * k;
     this.basketCall.material.opacity = 0.2 + 0.3 * k;
@@ -148,6 +183,7 @@ export class GardenView {
         const guard = stage === RIPE && !dry;
         let col = dry ? PLANT_FRAME.dry : stage;
         if (stage === 0 && !this.garden.isWet(view, now)) col = PLANT_FRAME.thirsty; // семечко без воды — выцветшее
+        if (guard && cell.nights > 0) col = PLANT_FRAME.wilted; // отстояло ночь — уставшее (ночью настороже — обычные кадры ниже)
         let [sx, sy] = [1, 1];
         if (guard && view.strike > 0) {
           view.strike = Math.max(0, view.strike - dt);

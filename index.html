@@ -67,8 +67,8 @@
         display: flex; gap: 10px;
       }
       .toolbar button {
-        position: relative; width: 78px; height: 80px; padding: 9px 0 7px;
-        display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+        position: relative; width: 72px; height: 72px; padding: 0;
+        display: flex; align-items: center; justify-content: center; /* только значок и цифра клавиши */
         font: inherit; font-size: 13px; color: var(--text-dim); cursor: pointer;
         transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.15s;
         touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -80,14 +80,13 @@
         transform: translateY(-3px);
       }
       .toolbar .pixel-icon { width: 36px; height: 36px; fill: currentColor; } /* 3 точки на пиксель значка */
-      .toolbar .name { font-size: 17px; line-height: 1; }
       .toolbar .key { position: absolute; top: 4px; left: 7px; font-size: 10px; opacity: 0.55; }
       .toolbar .count { position: absolute; top: 4px; right: 7px; font-size: 11px; color: var(--text); } /* «1/2» на корзинке */
       .toolbar .count.full { color: var(--amber); }
 
       /* Ряд семян над панелью */
       .seed-row {
-        position: fixed; left: 50%; bottom: 108px; transform: translateX(-50%);
+        position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%);
         display: none; gap: 8px; width: max-content; max-width: min(720px, calc(100vw - 16px)); padding: 4px;
         flex-wrap: wrap-reverse; justify-content: center; /* много семян — переносятся на строку выше */
       }
@@ -129,16 +128,39 @@
         flex: 1; height: 40px; font: inherit; font-size: 13px; border-radius: 10px; cursor: pointer;
         color: #2a1a0a; background: var(--amber); border: none; touch-action: manipulation;
       }
+      /* карточка растения в магазине: картинка слева, справа название, значки, кнопки */
+      .seed-card { display: flex; gap: 12px; align-items: center; }
+      .seed-card.locked { opacity: 0.75; }
+      .seed-body { flex: 1; min-width: 0; }
+      .plant-pic { width: 64px; height: 80px; image-rendering: pixelated; flex: none; margin: -8px 0; }
+      .plant-pic.locked { filter: brightness(0); opacity: 0.55; }
+      .stats { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 4px; font-size: 13px; color: var(--text-dim); }
+      .stat { display: inline-flex; align-items: center; gap: 4px; }
+      .stat .pixel-icon { width: 16px; height: 16px; fill: currentColor; }
+      .stat.moons { gap: 1px; color: #b8c6ff; } /* ночи на страже — лунным цветом */
+      .shop-name .stat { font-size: 13px; color: var(--text-dim); }
+      .shop-buy button { display: inline-flex; align-items: center; gap: 4px; }
+      .shop-buy button .pixel-icon, .tree-price .pixel-icon { width: 14px; height: 14px; fill: currentColor; }
+      .tree-price { display: inline-flex; align-items: center; gap: 3px; }
+      /* что нужно, чтобы открыть: маленькое растение и метки, сколько уже собрано */
+      .unlock { display: flex; align-items: center; gap: 10px; }
+      .unlock .plant-pic { width: 48px; height: 60px; margin: -6px 0; }
+      .pips { display: flex; gap: 5px; }
+      .pips i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--amber); opacity: 0.6; }
+      .pips i.on { background: var(--amber); opacity: 1; box-shadow: 0 0 6px var(--amber-soft); }
+      /* гербарий: родители гибрида */
+      .parents { display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--text-dim); }
+      .parents .plant-pic { width: 32px; height: 40px; margin: 0; }
+      .herb-card .stats { justify-content: center; }
       /* вкладки магазина: за монеты / за огоньки */
       .shop-tabs { display: flex; gap: 8px; padding: 12px 18px 0; }
       .shop-tabs button {
-        flex: 1; padding: 8px 0; font-size: 20px; color: var(--text-dim); cursor: pointer; touch-action: manipulation;
+        flex: 1; padding: 6px 0; display: flex; justify-content: center; color: var(--text-dim); cursor: pointer; touch-action: manipulation;
         background: rgba(255, 255, 255, 0.04); border: 1px solid var(--edge); border-radius: 10px;
       }
+      .shop-tabs .pixel-icon { width: 24px; height: 24px; fill: currentColor; }
       .shop-tabs button.selected { color: var(--amber); border-color: var(--amber); box-shadow: 0 0 14px var(--amber-soft); }
       /* дерево улучшений: ветка — цепочка шагов, слева — линия, по которой «течёт» свет купленных */
-      .tree-note { padding: 12px 18px 0; }
-      .tree-note b { color: var(--amber); font-weight: normal; }
       .tree { position: relative; margin: 6px 18px 4px 30px; }
       .tree::before { content: ''; position: absolute; left: -12px; top: 18px; bottom: 18px; width: 2px; background: var(--edge); }
       .tree-step { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 0; }
@@ -155,25 +177,25 @@
       .tree-step .shop-buy { margin-top: 0; }
       .tree-done, .tree-price { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
       /* гербарий: сетка карточек; неоткрытые — тёмный силуэт */
-      .herb-count { flex: 1; margin-left: 12px; font-size: 13px; color: var(--text-dim); font-family: Menlo, Consolas, monospace; }
+      .herb-count { flex: 1; margin-left: 12px; font-size: 15px; color: var(--text-dim); font-family: Menlo, Consolas, monospace; }
       .herb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 14px 18px 18px; }
       .herb-card { padding: 8px 10px 10px; border: 1px solid var(--edge); border-radius: 12px; background: rgba(255, 255, 255, 0.03); text-align: center; }
-      .herb-card img { width: 96px; height: 120px; image-rendering: pixelated; display: block; margin: -16px auto 0; } /* у рисунка пустой верх — поджимаем */
+      .herb-card > .plant-pic { width: 96px; height: 120px; display: block; margin: -16px auto 0; } /* у рисунка пустой верх — поджимаем */
       .herb-card .title { font-size: 20px; color: var(--text); margin-bottom: 4px; }
-      .herb-card.locked img { filter: brightness(0); opacity: 0.55; }
       .herb-card.locked .title { color: var(--text-dim); }
       .shop-buy button:disabled { color: var(--text-dim); background: rgba(255, 255, 255, 0.06); cursor: default; }
 
       /* Монеты и подсказки */
-      .hud { position: fixed; top: 12px; right: 12px; padding: 4px 14px 6px; font-size: 24px; color: var(--amber); }
-      .hud .embers { margin-left: 14px; color: #ffcf8a; } /* огоньки — рядом с монетами */
+      .hud { position: fixed; top: 12px; right: 12px; padding: 4px 14px 6px; font-size: 24px; color: var(--amber); display: flex; gap: 14px; }
+      .hud span { display: inline-flex; align-items: center; gap: 5px; }
+      .hud .pixel-icon { width: 20px; height: 20px; fill: currentColor; }
+      .hud .embers { color: #ffcf8a; } /* огоньки — рядом с монетами */
       /* Время суток — под монетами */
       .daytime {
         position: fixed; top: 58px; right: 12px; padding: 5px 10px 7px; display: grid;
         grid-template-columns: auto auto; column-gap: 7px; align-items: center; color: var(--amber);
       }
       .daytime-icon .pixel-icon { width: 20px; height: 20px; fill: currentColor; display: block; }
-      .daytime-name { font-size: 20px; line-height: 1; }
       .daytime-bar { grid-column: 1 / -1; height: 3px; margin-top: 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
       .daytime-bar i { display: block; height: 100%; background: currentColor; opacity: 0.7; }
       .daytime[data-phase='night'] { color: #b8c6ff; }
@@ -282,6 +304,8 @@
       .menu-report { margin: 14px 0 18px; font-size: 14px; }
       .menu-discovery { display: flex; justify-content: center; margin: 4px 0 6px; }
       .menu-discovery img { width: 128px; height: 160px; image-rendering: pixelated; filter: drop-shadow(0 0 18px var(--amber-soft)); }
+      .menu-parents { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0 4px; color: var(--text-dim); font-size: 20px; }
+      .menu-parents img { width: 48px; height: 60px; image-rendering: pixelated; }
       .menu-report div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--edge); }
       .menu-report div:last-child { border-bottom: none; }
       .menu-report span { color: var(--text-dim); }

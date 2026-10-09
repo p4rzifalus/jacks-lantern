@@ -172,7 +172,8 @@ export const CROSSING = {
 export const HAND_BASKET = { capacity: 2 };
 
 // Дерево улучшений за огоньки (вкладка «За огоньки» в магазине). Ветки — колонки, шаги в ветке открываются по порядку.
-//   id — имя (так записано в сохранении, не менять), name — название, text — что даёт, price — цена в огоньках.
+//   id — имя (так записано в сохранении, не менять), name — название, text — что даёт (коротко, видно в дереве),
+//   about — то же подробно (всплывает при наведении мыши), price — цена в огоньках.
 //   Что именно меняется — поле с числом:
 //     water: 'row' — лейка поливает ряд из 3 клеток поперёк взгляда енота, 'square' — квадрат 3×3
 //     growth — во сколько раз быстрее растут растения (1.2 — на 20%)
@@ -184,23 +185,23 @@ export const HAND_BASKET = { capacity: 2 };
 //     crossing — шанс гибрида при скрещивании (вместо CROSSING.chance)
 export const UPGRADES = [
   { id: 'garden', name: 'Огород', steps: [
-    { id: 'wateringRow', name: 'Широкая лейка', text: 'поливает ряд из 3 клеток', price: 5, water: 'row' },
-    { id: 'warmSoil', name: 'Тёплая земля', text: 'всё растёт на 20% быстрее', price: 15, growth: 1.2 },
-    { id: 'wateringSquare', name: 'Большая лейка', text: 'поливает квадрат 3×3', price: 35, water: 'square' },
+    { id: 'wateringRow', name: 'Широкая лейка', text: 'ряд из 3', about: 'лейка поливает ряд из 3 клеток поперёк взгляда енота', price: 5, water: 'row' },
+    { id: 'warmSoil', name: 'Тёплая земля', text: 'рост +20%', about: 'все растения растут на 20% быстрее', price: 15, growth: 1.2 },
+    { id: 'wateringSquare', name: 'Большая лейка', text: 'квадрат 3×3', about: 'лейка поливает квадрат 3×3 клетки', price: 35, water: 'square' },
   ] },
   { id: 'defense', name: 'Оборона', steps: [
-    { id: 'brightLantern', name: 'Яркий фонарь', text: 'светит на 30% дальше', price: 5, lanternRadius: 1.3 },
-    { id: 'strongRoots', name: 'Сильные корни', text: 'растения бьют на 25% сильнее', price: 15, attackPower: 1.25 },
-    { id: 'hardyPlants', name: 'Стойкие растения', text: 'стоят на страже на ночь дольше', price: 35, extraNights: 1 },
+    { id: 'brightLantern', name: 'Яркий фонарь', text: 'свет +30%', about: 'фонарь светит на 30% дальше', price: 5, lanternRadius: 1.3 },
+    { id: 'strongRoots', name: 'Сильные корни', text: 'удар +25%', about: 'растения бьют духов на 25% сильнее', price: 15, attackPower: 1.25 },
+    { id: 'hardyPlants', name: 'Стойкие растения', text: '+1 ночь', about: 'растения стоят на страже на ночь дольше, прежде чем засохнуть', price: 35, extraNights: 1 },
   ] },
   { id: 'basket', name: 'Корзинка', steps: [
-    { id: 'basket3', name: 'Корзинка на 3', text: '3 места для урожая', price: 5, basket: 3 },
-    { id: 'basket4', name: 'Корзинка на 4', text: '4 места для урожая', price: 15, basket: 4 },
-    { id: 'basket5', name: 'Корзинка на 5', text: '5 мест для урожая', price: 35, basket: 5 },
+    { id: 'basket3', name: 'Корзинка на 3', text: '3 места', about: 'в корзинку для сбора помещается 3 овоща', price: 5, basket: 3 },
+    { id: 'basket4', name: 'Корзинка на 4', text: '4 места', about: 'в корзинку для сбора помещается 4 овоща', price: 15, basket: 4 },
+    { id: 'basket5', name: 'Корзинка на 5', text: '5 мест', about: 'в корзинку для сбора помещается 5 овощей', price: 35, basket: 5 },
   ] },
   { id: 'breeding', name: 'Селекция', steps: [
-    { id: 'emberCall', name: 'Зов огоньков', text: 'огоньки летят к еноту издалека (с 5 клеток)', price: 10, emberPull: 5 },
-    { id: 'keenPollen', name: 'Чуткая пыльца', text: 'гибриды выходят вдвое чаще', price: 30, crossing: 0.6 },
+    { id: 'emberCall', name: 'Зов огоньков', text: 'с 5 клеток', about: 'огоньки сами летят к еноту издалека — с 5 клеток', price: 10, emberPull: 5 },
+    { id: 'keenPollen', name: 'Чуткая пыльца', text: 'гибриды ×2', about: 'семена гибридов выходят вдвое чаще', price: 30, crossing: 0.6 },
   ] },
 ];
 

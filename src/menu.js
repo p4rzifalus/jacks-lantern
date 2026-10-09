@@ -139,13 +139,11 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
 
   function render(name, data) {
     if (name === 'discovery') {
-      // выведен новый гибрид: картинка, имя, от кого и что умеет
+      // выведен новый гибрид: большая картинка, имя и от кого — без слов; закрывается тапом в любом месте
       card.innerHTML = `
-        <div class="menu-subtitle">новое растение</div>
-        <div class="menu-discovery"><img src="${data.image}" alt=""></div>
-        <div class="menu-title title">${escapeHtml(data.name)}</div>
-        <div class="menu-report">${data.rows.map(([label, value]) => `<div><span>${label}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div>
-        <div class="menu-buttons"><button class="primary" data-act="close">Чудесно</button></div>`;
+        <div class="menu-discovery" data-act="close"><img src="${data.image}" alt=""></div>
+        <div class="menu-title title" data-act="close">${escapeHtml(data.name)}</div>
+        <div class="menu-parents" data-act="close"><img src="${data.parents[0]}" alt="">+<img src="${data.parents[1]}" alt=""></div>`;
     } else if (name === 'start') {
       card.innerHTML = `
         <div class="menu-title title">Осенняя ферма</div>
@@ -217,7 +215,7 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     get isOpen() { return !!screen; },
     get isStart() { return screen === 'start'; },
     showStart: () => render('start'),
-    // Окно «новое растение»: { name, image (адрес картинки), rows: [подпись, значение] }
+    // Окно «новое растение»: { name, image (адрес картинки), parents: [картинка, картинка] }
     showDiscovery(data) {
       if (!screen) render('discovery', data);
     },

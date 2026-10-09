@@ -228,7 +228,7 @@ export function drawHeroSheet(skin) {
 // Кадр 32×40, земля — нижняя строка. Колонки: стадии 0 семечко, 1 росток, 2 куст, 3 спелое;
 // дальше — спелое растение ночью: 4–5 настороже (по улице ходит дух), 6 замах, 7 удар.
 // Строки — растения в порядке PLANT_ORDER (морковь, редис, тыква, подсолнух, гриб, потом гибриды).
-export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 10, alert: [4, 2], windup: 6, strike: 7, dry: 8, thirsty: 9 };
+export const PLANT_FRAME = { frameW: 32, frameH: 40, cols: 11, alert: [4, 2], windup: 6, strike: 7, dry: 8, thirsty: 9, wilted: 10 };
 
 // Маленькая кучка земли у основания растения
 function mound(d) {
@@ -497,6 +497,14 @@ function thirstySprite(x, y, color) {
   return [x, y, color.map((v, k) => Math.round(v + (DUST[k] - v) * 0.55)), false];
 }
 
+// Уставшее растение (отстояло ночь на страже — продастся за полцены): чуть выцвело и слегка поникло
+function wiltedSprite(x, y, [r, g, b]) {
+  const grey = 0.3 * r + 0.55 * g + 0.15 * b;
+  const color = [r, g, b].map((v) => Math.round(v + (grey * 0.95 - v) * 0.4));
+  const h = Math.max(0, DRY_GROUND - y);
+  return [x + Math.round(h * 0.08), DRY_GROUND - h * 0.92, color, false];
+}
+
 function drySprite(x, y, [r, g, b]) {
   const l = Math.min(1, (0.3 * r + 0.55 * g + 0.15 * b) / 200);
   const color = DRY_DARK.map((v, k) => Math.round(v + (DRY_LIGHT[k] - v) * l));
@@ -508,8 +516,8 @@ export function drawPlantSheet() {
   const { frameW, frameH, cols } = PLANT_FRAME;
   const sheet = new PixelSheet(frameW * cols, frameH * PLANT_ORDER.length);
   // что в какой колонке: [стадия, поза, кадр]
-  const columns = [[0], [1], [2], [3], [3, 'alert', 0], [3, 'alert', 1], [3, 'windup'], [3, 'strike'], [3, 'dry'], [0, 'thirsty']];
-  const REMAP = { dry: drySprite, thirsty: thirstySprite };
+  const columns = [[0], [1], [2], [3], [3, 'alert', 0], [3, 'alert', 1], [3, 'windup'], [3, 'strike'], [3, 'dry'], [0, 'thirsty'], [3, 'wilted']];
+  const REMAP = { dry: drySprite, thirsty: thirstySprite, wilted: wiltedSprite };
   PLANT_ORDER.forEach((type, row) => {
     columns.forEach(([stage, pose, i], col) => {
       const remap = REMAP[pose] || null;

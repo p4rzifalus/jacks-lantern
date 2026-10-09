@@ -202,6 +202,105 @@ const PIXEL_ICONS = {
     '....####....',
     '............',
   ],
+  // огонёк, мешочек семян и виды атаки растений (магазин и гербарий)
+  ember: [
+    '............',
+    '.....#......',
+    '.....##.....',
+    '....###.....',
+    '....####.#..',
+    '...#####.#..',
+    '..########..',
+    '..###..###..',
+    '..##....##..',
+    '..###..###..',
+    '...######...',
+    '............',
+  ],
+  bag: [
+    '............',
+    '....#..#....',
+    '.....##.....',
+    '....####....',
+    '...######...',
+    '..########..',
+    '.##########.',
+    '.##########.',
+    '.##########.',
+    '.##########.',
+    '..########..',
+    '............',
+  ],
+  whip: [
+    '............',
+    '..........#.',
+    '.........##.',
+    '........##..',
+    '.......##...',
+    '......##....',
+    '.....##.....',
+    '....##......',
+    '...##.......',
+    '..##........',
+    '.##.........',
+    '............',
+  ],
+  spark: [
+    '............',
+    '.....##.....',
+    '.....##.....',
+    '..#..##..#..',
+    '...######...',
+    '.##########.',
+    '.##########.',
+    '...######...',
+    '..#..##..#..',
+    '.....##.....',
+    '.....##.....',
+    '............',
+  ],
+  wall: [
+    '............',
+    '............',
+    '############',
+    '#..#...#...#',
+    '############',
+    '..#...#...#.',
+    '############',
+    '#...#...#..#',
+    '############',
+    '............',
+    '............',
+    '............',
+  ],
+  beam: [
+    '............',
+    '............',
+    '#...........',
+    '###.........',
+    '######......',
+    '############',
+    '############',
+    '######......',
+    '###.........',
+    '#...........',
+    '............',
+    '............',
+  ],
+  spores: [
+    '............',
+    '..#.....#...',
+    '......#.....',
+    '.#...#....#.',
+    '....###.....',
+    '...#####....',
+    '..#######...',
+    '....###...#.',
+    '.#..###.....',
+    '....###..#..',
+    '..#######...',
+    '............',
+  ],
   // книга — гербарий
   book: [
     '............',
@@ -290,11 +389,12 @@ function el(tag, className, html = '') {
   return e;
 }
 
+// Кнопка панели: значок и цифра клавиши; название — во всплывающей подсказке
 function toolButton(key, icon, name) {
-  return el('button', '', `
-    <span class="key">${key}</span>
-    ${pixelIcon(icon)}
-    <span class="name title">${name}</span>`);
+  const b = el('button', '', `<span class="key">${key}</span>${pixelIcon(icon)}`);
+  b.title = name;
+  b.setAttribute('aria-label', name);
+  return b;
 }
 
 // «1 огонёк», «5 огоньков»
@@ -363,9 +463,8 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
 
   // Время суток под монетами: значок, название и полоска — сколько осталось до следующей части
   const DAYTIME_ICONS = { morning: 'sunrise', day: 'sun', evening: 'sunrise', night: 'moon' };
-  const daytimeBox = el('div', 'daytime', '<span class="daytime-icon"></span><span class="daytime-name title"></span><span class="daytime-bar"><i></i></span>');
+  const daytimeBox = el('div', 'daytime', '<span class="daytime-icon"></span><span class="daytime-bar"><i></i></span>');
   const daytimeIcon = daytimeBox.querySelector('.daytime-icon');
-  const daytimeName = daytimeBox.querySelector('.daytime-name');
   const daytimeFill = daytimeBox.querySelector('.daytime-bar i');
   let shownPhase = null;
   document.body.appendChild(daytimeBox);
@@ -375,7 +474,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   let lastView = null;
   const shop = el('div', 'shop-backdrop');
   shop.innerHTML = `<div class="shop"><div class="shop-head"><span class="title">Магазин</span><button class="shop-close" aria-label="Закрыть">✕</button></div>
-    <div class="shop-tabs"><button data-tab="coins" class="title">За монеты</button><button data-tab="embers" class="title">За огоньки</button></div>
+    <div class="shop-tabs"><button data-tab="coins" title="семена за монеты">${pixelIcon('coin')}</button><button data-tab="embers" title="улучшения за огоньки">${pixelIcon('ember')}</button></div>
     <div class="shop-list"></div></div>`;
   const shopList = shop.querySelector('.shop-list');
   const tabButtons = shop.querySelectorAll('.shop-tabs button');
@@ -394,39 +493,55 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
   document.body.appendChild(shop);
 
   // Семена за монеты
+  // Растение в цифрах и значках: растёт, стоит урожай, как бьёт ночью и сколько ночей стоит на страже.
+  // Словами — только во всплывающей подсказке при наведении мыши
+  const stat = (icon, value, title) => `<span class="stat" title="${title}">${pixelIcon(icon)}${value}</span>`;
+  function plantStats(p) {
+    const nights = plural(p.nights, ['ночь', 'ночи', 'ночей']);
+    return `<div class="stats">
+      ${stat('clock', formatTime(p.growSeconds), 'растёт')}
+      ${stat('coin', p.sellPrice, `урожай; после ночи на страже — ${p.wiltedPrice}`)}
+      ${stat(p.attack.type, p.attack.reach || '', `ночью, если не собрать: ${p.role}`)}
+      <span class="stat moons" title="стоит на страже ${nights}, потом засыхает">${pixelIcon('moon').repeat(p.nights)}</span>
+    </div>`;
+  }
+  const plantPicture = (type, locked = false) => `<img class="plant-pic${locked ? ' locked' : ''}" src="${plantImage(type)}" alt="">`;
+
+  // Семена за монеты: картинка, название, сколько есть, значки; закрытые — силуэт и сколько ещё собрать (метки-точки)
   function seedRows(view) {
     return view.shop.map((row) => {
       if (!row.unlocked) {
-        return `<div class="shop-row locked"><div class="shop-name"><span class="title">???</span></div><div class="shop-info">Откроется: ${row.condition}</div></div>`;
+        const u = row.unlock;
+        const pips = Array.from({ length: u.count }, (_, i) => `<i class="${i < u.have ? 'on' : ''}"></i>`).join('');
+        return `<div class="shop-row seed-card locked">${plantPicture(row.type, true)}<div class="seed-body">
+          <div class="unlock" title="собери ещё — и семена появятся">${plantPicture(u.plant)}<span class="pips">${pips}</span></div></div></div>`;
       }
-      const info = `рост ${formatTime(row.growSeconds)} · урожай ${row.sellPrice} мон.`;
-      const d = row.defense;
-      const guard = `<div class="shop-info guard">ночью, если не собрать: ${d.role} · служит ${plural(d.nights, ['ночь', 'ночи', 'ночей'])}, потом засыхает · после ночи на страже урожай ${row.wiltedPrice} мон.</div>`;
-      if (row.seedPrice === 0) {
-        return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-info">семена бесплатно, сколько угодно</div></div>`;
-      }
-      const buyButton = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} за ${row.seedPrice * n}</button>`;
-      return `<div class="shop-row"><div class="shop-name"><span class="title">${row.name}</span><span class="owned">у тебя: ${row.owned}</span></div><div class="shop-info">${info}</div>${guard}<div class="shop-buy">${buyButton(1)}${buyButton(5)}</div></div>`;
+      const owned = row.seedPrice === 0 ? '∞' : row.owned;
+      const buy = (n) => `<button data-buy="${row.type}" data-count="${n}" ${view.coins < row.seedPrice * n ? 'disabled' : ''}>+${n} ${pixelIcon('coin')}${row.seedPrice * n}</button>`;
+      return `<div class="shop-row seed-card">${plantPicture(row.type)}<div class="seed-body">
+        <div class="shop-name"><span class="title">${row.name}</span>${stat('bag', owned, 'семян в мешочке')}</div>
+        ${plantStats(row)}
+        ${row.seedPrice === 0 ? '' : `<div class="shop-buy">${buy(1)}${buy(5)}</div>`}</div></div>`;
     }).join('');
   }
 
   // Дерево улучшений: ветка — цепочка шагов сверху вниз; куплено — светится, следующий — с кнопкой, дальше — тускло
   function upgradeRows(view) {
-    const head = `<div class="shop-info tree-note">Огоньки остаются от прогнанных ночью духов. У тебя: <b>${view.embers}</b></div>`;
-    return head + view.upgrades.map((branch) => `<div class="shop-section title">${branch.name}</div><div class="tree">${branch.steps.map((step) => {
+    return view.upgrades.map((branch) => `<div class="shop-section title">${branch.name}</div><div class="tree">${branch.steps.map((step) => {
       const state = step.owned ? 'owned' : step.available ? 'available' : 'locked';
+      const price = `${step.price}${pixelIcon('ember')}`;
       const action = step.owned
-        ? '<span class="tree-done">есть</span>'
+        ? '<span class="tree-done">✓</span>'
         : step.available
-          ? `<button data-upgrade="${step.id}" ${view.embers < step.price ? 'disabled' : ''}>за ${embersOf(step.price)}</button>`
-          : `<span class="tree-price">${embersOf(step.price)}</span>`;
-      return `<div class="tree-step ${state}"><div class="tree-text"><span class="title">${step.name}</span><span class="shop-info">${step.text}</span></div><div class="shop-buy">${action}</div></div>`;
+          ? `<button data-upgrade="${step.id}" ${view.embers < step.price ? 'disabled' : ''}>${price}</button>`
+          : `<span class="tree-price">${price}</span>`;
+      return `<div class="tree-step ${state}" title="${step.about}"><div class="tree-text"><span class="title">${step.name}</span><span class="shop-info">${step.text}</span></div><div class="shop-buy">${action}</div></div>`;
     }).join('')}</div>`).join('');
   }
 
   function renderShop(view) {
     for (const b of tabButtons) b.classList.toggle('selected', b.dataset.tab === shopTab);
-    shopList.innerHTML = shopTab === 'coins' ? '<div class="shop-section title">Семена</div>' + seedRows(view) : upgradeRows(view);
+    shopList.innerHTML = shopTab === 'coins' ? seedRows(view) : upgradeRows(view);
   }
 
   // Гербарий: карточки всех растений; неоткрытые — силуэт и «???»
@@ -441,16 +556,13 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
 
   function renderHerbarium(view) {
     const open = view.herbarium.filter((p) => p.open).length;
-    herbCount.textContent = `открыто ${open} из ${view.herbarium.length}`;
+    herbCount.textContent = `${open} / ${view.herbarium.length}`;
     herbGrid.innerHTML = view.herbarium.map((p) => {
-      const img = `<img src="${plantImage(p.type)}" alt="">`;
-      if (!p.open) return `<div class="herb-card locked">${img}<div class="title">???</div></div>`;
-      const rows = [
-        p.parents && `выведено из: ${p.parents.join(' и ')}`,
-        `рост ${formatTime(p.growSeconds)} · урожай ${p.sellPrice} мон.`,
-        `собрано: ${p.harvested}`,
-      ].filter(Boolean).map((r) => `<div class="shop-info">${r}</div>`).join('');
-      return `<div class="herb-card">${img}<div class="title">${p.name}</div>${rows}<div class="shop-info guard">${p.role}</div></div>`;
+      if (!p.open) return `<div class="herb-card locked">${plantPicture(p.type, true)}<div class="title">???</div></div>`;
+      // гибрид: от кого выведен — две маленькие картинки родителей
+      const parents = p.parents ? `<div class="parents" title="выведено скрещиванием">${plantPicture(p.parents[0])}+${plantPicture(p.parents[1])}</div>` : '';
+      return `<div class="herb-card">${plantPicture(p.type)}<div class="title">${p.name}</div>${parents}${plantStats(p)}
+        <div class="stats">${stat('basket', `×${p.harvested}`, 'сколько собрано')}</div></div>`;
     }).join('');
   }
 
@@ -466,7 +578,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       basketCount.textContent = `${view.carried.length}/${view.capacity}`;
       basketCount.classList.toggle('full', view.carried.length >= view.capacity);
       closeUpButton.setAttribute('aria-pressed', String(!!view.closeUp));
-      coinsBox.innerHTML = `Монеты: ${view.coins}${view.embers ? `<span class="embers">Огоньки: ${view.embers}</span>` : ''}`;
+      coinsBox.innerHTML = `<span title="монеты">${pixelIcon('coin')}${view.coins}</span>${view.embers ? `<span class="embers" title="огоньки">${pixelIcon('ember')}${view.embers}</span>` : ''}`;
 
       seedRow.classList.toggle('visible', view.tool === 'seeds');
       seedRow.innerHTML = view.seedOptions
@@ -486,7 +598,7 @@ export function createUI({ onSelectTool, onSelectSeed, onBuy, onUpgrade, onShopT
       if (phase.id !== shownPhase) {
         shownPhase = phase.id;
         daytimeIcon.innerHTML = pixelIcon(DAYTIME_ICONS[phase.id] || 'sun');
-        daytimeName.textContent = phase.name;
+        daytimeBox.title = phase.name; // слово — только в подсказке при наведении
         daytimeBox.dataset.phase = phase.id;
       }
       daytimeFill.style.width = `${Math.round((1 - phase.progress) * 100)}%`;
