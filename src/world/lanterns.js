@@ -170,7 +170,7 @@ export function createLanterns(scene, quality) {
         if (!l.light.castShadow) return;
         if (!lit) { l.shadowStale = true; return; } // днём тень не видна — обновим, когда зажжётся
         const near = movers.some((p) => p.distanceTo(l.light.position) < l.light.distance + 0.5);
-        if (l.shadowStale || (near && (frame + i) % 3 === 0) || (frame + i) % 180 === 0) {
+        if (l.shadowStale || near || (frame + i) % 180 === 0) { // рядом кто-то ходит — каждый кадр, иначе тень отстаёт рывками
           l.light.shadow.needsUpdate = true;
           l.shadowStale = false;
         }

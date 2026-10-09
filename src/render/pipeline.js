@@ -76,21 +76,34 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
   resize();
   window.addEventListener('resize', resize);
 
-  // Сторож кадров: если кадров мало — по шагу облегчает картинку, есть запас — так же по шагу возвращает.
-  // Шаги — от самого незаметного к заметному: затенение в углах → лучи света → чёткость −0,25 →
-  // размытие краёв (tilt-shift) → чёткость дальше вниз (не ниже 0,75). Всё на лету, без перезагрузки.
-  // Меряем реальное время между кадрами за 2 секунды. Возвращаем осторожно: после 3 быстрых замеров подряд (6 с)
-  // и не раньше чем через 30 с после облегчения — иначе картинка скачет туда-сюда.
+  // Сторож кадров: если видеокарта не успевает — по шагу облегчает картинку. Обратно в той же игре не возвращает:
+  // иначе картинка скачет туда-сюда (облегчил → стало гладко → вернул → снова рывки), это и было «ломано».
+  // Шаги — от самого незаметного к заметному: затенение в углах → чёткость −0,25 → размытие краёв (tilt-shift) →
+  // лучи света → чёткость дальше вниз (не ниже 0,75). Всё на лету, без перезагрузки.
+  // Смотрим не на среднее, а на опоздавшие кадры: 15 % кадров по 33 мс в среднем почти незаметны, а глазу — рывки.
+  // Уровень запоминаем: в следующий раз игра начнёт сразу с него. Раз в сутки пробует на шаг лучше —
+  // вдруг тогда мешало что-то другое (браузер был занят, окно было меньше).
   const steps = [];
   if (ao) steps.push('ao');
-  steps.push('rays');
   const dprSteps = [];
   for (let r = quality.maxDpr - 0.25; r >= 0.75 - 1e-6; r -= 0.25) dprSteps.push(r);
   if (dprSteps.length) steps.push(`dpr:${dprSteps.shift()}`);
   if (tiltPass) steps.push('tilt');
+  steps.push('rays');
   for (const r of dprSteps) steps.push(`dpr:${r}`);
-  let level = 0; // сколько шагов облегчения сейчас применено
   const economy = { rays: true }; // лучи света рисует не конвейер, а light-rays.js — main.js спрашивает здесь
+  const levelKey = `ogorod2-economy-${quality.name}`;
+  const RETRY_MS = 24 * 3600 * 1000; // пробовать на шаг лучше — не чаще раза в сутки (каждая попытка — пара секунд рывков)
+  let level = 0; // сколько шагов облегчения сейчас применено
+  let triedAt = Date.now();
+  try {
+    const saved = JSON.parse(localStorage.getItem(levelKey));
+    if (Number.isFinite(saved?.level)) {
+      const retry = Date.now() - saved.triedAt > RETRY_MS;
+      level = Math.max(0, Math.min(steps.length, saved.level - (retry ? 1 : 0)));
+      if (!retry) triedAt = saved.triedAt;
+    }
+  } catch { /* браузер не даёт читать или старая запись — начинаем с полного качества */ }
   function applyLevel() {
     const on = steps.slice(0, level);
     if (ao) ao.enabled = !on.includes('ao');
@@ -103,34 +116,48 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
       resize();
     }
   }
+  function rememberLevel() {
+    try {
+      localStorage.setItem(levelKey, JSON.stringify({ level, triedAt }));
+    } catch { /* не страшно */ }
+  }
+  applyLevel();
+  rememberLevel();
 
+  const WINDOW_MS = 2000; // замер — за 2 секунды
+  const LATE_MS = 22;     // кадр дольше — опоздал (при 60 кадрах/с шаг 16,7 мс, опоздавший — 33 мс)
+  const LATE_SHARE = 0.05; // опоздавших больше 5 % — облегчить
   let frames = 0;
-  let windowStart = performance.now();
-  let fastWindows = 0;
-  let loweredAt = -Infinity;
+  let late = 0;
+  let prev = 0;
+  let windowStart = 0;
+  let settle = 1; // сколько замеров пропустить: после запуска и после облегчения картинка пересобирается
   // measure: false — кадры нарочно редкие (меню, 30 кадров/с): такие замеры не считаем
   function watchdog(now, measure) {
-    if (!measure) {
+    if (!measure || document.hidden || now - prev > 250) { // меню, вкладка в фоне, долгая пауза — замер заново
       frames = 0;
+      late = 0;
       windowStart = now;
+      prev = now;
       return;
     }
     frames++;
-    const elapsed = now - windowStart;
-    if (elapsed < 2000) return;
-    const frameMs = elapsed / frames;
+    if (now - prev > LATE_MS) late++;
+    prev = now;
+    if (now - windowStart < WINDOW_MS) return;
+    const share = late / frames;
     frames = 0;
+    late = 0;
     windowStart = now;
-    if (document.hidden || frameMs > 500) return; // вкладка в фоне — не считается
-    fastWindows = frameMs < 17.8 ? fastWindows + 1 : 0;   // держит полные 60 кадров/с
-    if (frameMs > 22 && level < steps.length) {          // медленнее ~45 кадров/с — облегчить
+    if (settle > 0) {
+      settle--;
+      return;
+    }
+    if (share > LATE_SHARE && level < steps.length) {
       level++;
-      loweredAt = now;
+      settle = 1;
       applyLevel();
-    } else if (fastWindows >= 3 && level > 0 && now - loweredAt > 30000) {
-      level--;
-      fastWindows = 0;
-      applyLevel();
+      rememberLevel();
     }
   }
 
@@ -142,6 +169,7 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
     mixDaytimeLut(a, b, t) {
       autoLut.mix(luts[a] || luts.evening, luts[b] || luts.evening, t);
     },
+    composer, // для замеров (render/bench.js, консоль)
     get pixelRatio() {
       return renderer.getPixelRatio();
     },
@@ -152,9 +180,11 @@ export function createPipeline(renderer, scene, camera, settings, quality) {
     get economy() {
       return { ...economy, level, steps: steps.length, off: steps.slice(0, level) };
     },
-    render(dt, measure = true) {
+    // now — время кадра от браузера (requestAnimationFrame): по нему видно, когда кадр опоздал на экран.
+    // performance.now() после отрисовки не годится — видеокарта доделывает кадр позже, и опоздание не видно
+    render(dt, measure = true, now = performance.now()) {
       composer.render(dt);
-      watchdog(performance.now(), measure);
+      watchdog(now, measure);
     },
   };
 }

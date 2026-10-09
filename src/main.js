@@ -368,6 +368,7 @@ function snapshot() {
 function save() {
   // до стартового экрана и пока он открыт ещё не играем — нечего сохранять
   if (restarting || !menu || menu.isStart || BENCH_SCENE) return;
+  stats?.mark('сохранение');
   saveGame(snapshot());
 }
 
@@ -775,8 +776,9 @@ function frame(now) {
   placeOn(hoverFrame, input.hoverCell);
   placeOn(frontMarker, actionCell());
 
-  lighting.shadowTick(frameCount);
-  pipeline.render(dt, !quiet); // в меню кадры нарочно редкие — сторож их не считает
+  lighting.shadowTick();
+  stats?.shadows(scene);
+  pipeline.render(dt, !quiet, now); // в меню кадры нарочно редкие — сторож их не считает
   stats?.end(realDt);
   devPanel?.tick(now);
 }

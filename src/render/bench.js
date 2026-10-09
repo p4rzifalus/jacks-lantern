@@ -32,6 +32,20 @@ export function createStats(renderer, qualityName, economy = () => null) {
     return e.off.map((st) => NAMES[st] || `чёткость ${st.slice(4).replace('.', ',')}`).join(', ');
   }
 
+  // Журнал рывков (этап 14е): каждый кадр дольше JANK_MS — с подписями, что в нём происходило.
+  // Подписи: «шейдер» — видеокарта готовила новый вид графики, «текстура» — загружала картинку,
+  // «память» — браузер убирал мусор, «тени N» — сколько теней пересчитано, остальное — mark() из main.js.
+  // Последние рывки видны в счётчике, весь журнал — в консоли: window.jank
+  const JANK_MS = 25;
+  const jank = [];
+  window.jank = jank;
+  let tags = [];
+  let prevTags = []; // рывок часто виден кадром позже: видеокарта доделывает работу прошлого кадра
+  let beginAt = 0;
+  let programs = renderer.info.programs?.length ?? 0;
+  let textures = renderer.info.memory.textures;
+  let heap = performance.memory?.usedJSHeapSize ?? 0;
+
   const recent = []; // [время, длина кадра в мс] за последние 2 секунды
   let shownAt = 0;
   let calls = 0;
@@ -46,7 +60,9 @@ export function createStats(renderer, qualityName, economy = () => null) {
     const fps = last.length;
     const worst = Math.max(0, ...recent.map(([, ms]) => ms));
     const title = BENCH_SCENE ? `замер: ${SCENES[BENCH_SCENE]} · ${Math.max(0, Math.ceil(BENCH_SECONDS - run.t))} с` : `качество: ${qualityName}`;
-    box.innerHTML = `<b>${fps}</b> кадров/с · худший ${worst.toFixed(0)} мс<br>${calls} отрисовок · ${(tris / 1000).toFixed(0)} тыс. треуг.<br><small>${title} · ${lightened()}</small>`;
+    const lastJank = jank.slice(-3).reverse().map((j) => `${j.gap} мс (работа ${j.cpu}) ${j.tags.join(', ')}${j.before.length ? ` ← ${j.before.join(', ')}` : ''}`).join('<br>');
+    box.innerHTML = `<b>${fps}</b> кадров/с · худший ${worst.toFixed(0)} мс<br>${calls} отрисовок · ${(tris / 1000).toFixed(0)} тыс. треуг.<br><small>${title} · ${lightened()}</small>`
+      + (jank.length ? `<br><small>рывков: ${jank.length}<br>${lastJank}</small>` : '');
   }
 
   // Итог замера сцены: окно с цифрами и кнопками «ещё раз» / «к игре»
@@ -85,6 +101,18 @@ export function createStats(renderer, qualityName, economy = () => null) {
     },
     begin() {
       renderer.info.reset();
+      beginAt = performance.now();
+      tags = [];
+    },
+    // Подписать текущий кадр для журнала рывков (например, 'сохранение')
+    mark(tag) {
+      tags.push(tag);
+    },
+    // Перед отрисовкой: сколько теней будет пересчитано в этом кадре
+    shadows(scene) {
+      let n = 0;
+      if (renderer.shadowMap.needsUpdate) scene.traverse((o) => { if (o.isLight && o.castShadow && o.shadow.needsUpdate) n++; });
+      if (n) tags.push(`тени ${n}`);
     },
     end(dt) {
       const now = performance.now();
@@ -92,6 +120,21 @@ export function createStats(renderer, qualityName, economy = () => null) {
         skipFrame = document.hidden;
         return;
       }
+      const cpu = now - beginAt;
+      const nowPrograms = renderer.info.programs?.length ?? 0;
+      const nowTextures = renderer.info.memory.textures;
+      const nowHeap = performance.memory?.usedJSHeapSize ?? 0;
+      if (nowPrograms !== programs) tags.push('шейдер');
+      if (nowTextures > textures) tags.push('текстура');
+      if (nowHeap < heap - 1e6) tags.push('память');
+      programs = nowPrograms;
+      textures = nowTextures;
+      heap = nowHeap;
+      if (dt * 1000 > JANK_MS) {
+        jank.push({ at: Math.round(now / 100) / 10, gap: Math.round(dt * 1000), cpu: Math.round(cpu), tags, before: prevTags });
+        if (jank.length > 200) jank.shift();
+      }
+      prevTags = tags;
       calls = renderer.info.render.calls;
       tris = renderer.info.render.triangles;
       recent.push([now, dt * 1000]);
