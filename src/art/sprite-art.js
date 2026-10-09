@@ -635,23 +635,33 @@ function drawBasketBack(d) {
   d.ellipse(7.5, 8, 5.5, 1.5, C.basketInside);
 }
 
-// Фонарь Джек (ночью висит у енота сбоку, днём — на крюке у двери): дужка, рамка, светящееся стекло.
-// lit: false — днём спит: стекло тусклое, огонёк крошечный и не светится
+// Фонарь Джек (ночью висит у енота сбоку, днём — на крюке у двери), как портрет (art/jack-art.js):
+// кольцо, красный поясок, крыша с загнутыми краями, корпус со светящимися стёклами, основание.
+// lit: false — днём спит: стёкла тусклые, огонёк еле тлеет
 function drawLantern(d, lit = true) {
-  d.line(6, 2, 9, 2, C.wateringCanDark);   // дужка
-  d.px(5, 3, C.wateringCanDark);
-  d.px(10, 3, C.wateringCanDark);
-  d.rect(5, 4, 6, 1, C.wateringCanDark);   // крышка
-  if (lit) {
-    d.rect(5, 5, 6, 7, '#ffd27a', true);   // стекло светится
-    d.rect(7, 6, 2, 4, '#fff4c8', true);   // огонёк
-  } else {
-    d.rect(5, 5, 6, 7, '#9a7a4e');         // тусклое стекло
-    d.rect(7, 9, 2, 2, '#e8b05a');         // огонёк еле тлеет
-  }
-  d.line(5, 5, 5, 11, C.wateringCanDark);  // рамка
-  d.line(10, 5, 10, 11, C.wateringCanDark);
-  d.rect(5, 12, 6, 1, C.wateringCanDark);  // донышко
+  const iron = '#3a3a2a';                  // тёмная бронза
+  const ring = '#77744c';                  // светлая бронза
+  d.rect(7, 0, 2, 1, ring);                // кольцо
+  d.px(6, 1, ring);
+  d.px(9, 1, ring);
+  d.rect(7, 2, 2, 1, ring);
+  d.rect(7, 3, 2, 1, lit ? '#ff5a2a' : '#7a3020', lit); // поясок
+  d.rect(5, 4, 6, 1, iron);                // крыша
+  d.rect(2, 5, 12, 1, iron);
+  d.px(1, 4, iron);                        // загнутые края
+  d.px(14, 4, iron);
+  d.rect(3, 6, 10, 1, ring);               // край крыши
+  d.rect(4, 7, 8, 3, iron);                // рама: сверху шире,
+  d.rect(5, 10, 6, 3, iron);               // книзу уже
+  const side = lit ? '#e8701e' : '#6e4428';
+  d.rect(5, 8, 1, 2, side, lit);           // стёкла
+  d.rect(10, 8, 1, 2, side, lit);
+  d.rect(6, 8, 4, 5, lit ? '#ffa63a' : '#8a5a30', lit);
+  if (lit) d.rect(7, 9, 2, 3, '#ffe08a', true); // огонь за стеклом
+  else d.rect(7, 11, 2, 1, '#d9772e');
+  d.rect(5, 13, 6, 1, iron);               // основание
+  d.rect(6, 14, 4, 1, iron);
+  d.rect(7, 15, 2, 1, iron);               // шишечка
 }
 
 function drawBasketFront(d) {
