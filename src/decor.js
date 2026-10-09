@@ -9,6 +9,7 @@ import { getMaterial, mapTextures } from './art/assets.js';
 import { glowMaterial } from './render/glow.js';
 import { mergeStatic } from './render/merge.js';
 import { Sprite } from './render/sprites.js';
+import { SpriteBatch } from './render/sprite-batch.js';
 import { viewAngle } from './render/view-angle.js';
 import { getSheets } from './world/sheets.js';
 import { DECOR_FRAME } from './art/sprite-art.js';
@@ -65,7 +66,8 @@ export function createDecor(scene, landmarks) {
     return p;
   }
 
-  // Камни
+  // Камни (неподвижные — склеиваем в пару кусков, по одному на цвет)
+  const stones = new THREE.Group();
   for (let i = 0; i < DECOR.stones; i++) {
     const r = between(0.1, 0.2);
     const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), lambert(rand() < 0.5 ? COLORS.stone : COLORS.stoneDark));
@@ -73,19 +75,16 @@ export function createDecor(scene, landmarks) {
     stone.scale.y = 0.6;
     stone.rotation.set(rand() * 3, rand() * 3, rand() * 3);
     stone.castShadow = false; // мелкие — без теней
-    scene.add(stone);
+    stones.add(stone);
   }
+  scene.add(stones);
+  mergeStatic(stones);
 
-  // Травинки и цветы — пиксельные спрайты, качаются на ветру (наклон у основания)
+  // Травинки и цветы — пиксельные спрайты, качаются на ветру (наклон у основания).
+  // Все вместе — одной пачкой (render/sprite-batch.js): собираем, где какие, а пачку делаем, когда все известны
   const decorSheet = getSheets().decor;
   const swaying = [];
-  const plantSprite = (col, position, amount) => {
-    const sprite = new Sprite(decorSheet, { castShadow: false }); // мелочь без теней: почти не видно, а считать дорого
-    sprite.setFrame(col, 0);
-    sprite.object.position.copy(position);
-    swaying.push({ mesh: sprite.mesh, phase: rand() * 6, amount });
-    scene.add(sprite.object);
-  };
+  const plantSprite = (col, position, amount) => swaying.push({ col, position, phase: rand() * 6, amount });
   const pick = (list) => list[Math.floor(rand() * list.length)];
   for (let i = 0; i < DECOR.grassTufts; i++) plantSprite(pick(DECOR_FRAME.tufts), takeSpot(), 0.25);
   for (let i = 0; i < DECOR.flowers; i++) plantSprite(pick(DECOR_FRAME.flowers), takeSpot(), 0.15);
@@ -160,6 +159,13 @@ export function createDecor(scene, landmarks) {
       plantSprite(pick(DECOR_FRAME.tall), new THREE.Vector3(patch.x + between(-0.35, 0.35), 0, patch.z + between(-0.35, 0.35)), 0.3);
     }
   }
+  const grass = new SpriteBatch(decorSheet, swaying.length, { castShadow: false }); // мелочь без теней: почти не видно, а считать дорого
+  swaying.forEach((s, i) => {
+    s.item = grass.items[i];
+    s.item.setFrame(s.col, 0);
+    s.item.object.position.copy(s.position);
+  });
+  scene.add(grass.mesh);
 
   // Дерево с осенней листвой и качелями на ветке
   const tree = new THREE.Group();
@@ -238,8 +244,9 @@ export function createDecor(scene, landmarks) {
       const windRight = wind.x * Math.cos(viewAngle.yaw) - wind.z * Math.sin(viewAngle.yaw);
       for (const s of swaying) {
         const lean = windStrength * s.amount * (0.7 + 0.3 * Math.sin(time * 2.2 + s.phase));
-        s.mesh.rotation.z = -windRight * lean;
+        s.item.mesh.rotation.z = -windRight * lean;
       }
+      grass.update();
 
       // Флюгер смотрит по ветру, чуть подрагивает
       arrow.rotation.y = angle + Math.sin(time * 3.1) * 0.08 * windStrength;

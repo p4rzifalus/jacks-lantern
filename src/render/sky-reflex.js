@@ -13,12 +13,17 @@ export const skyUniforms = {
   uFadeStrength: { value: 0.85 },
 };
 
-// Добавить вставку одному материалу (копия материала — clone() — вставку не переносит, её добавляют заново)
+// Добавить вставку одному материалу (копия материала — clone() — вставку не переносит, её добавляют заново).
+// Если у материала уже есть своя вставка (например, пачка спрайтов берёт каждому свой кадр) — наша идёт после неё
+const patched = new WeakSet();
 export function patch(material) {
-  if (material.userData.skyPatched && material.customProgramCacheKey() === 'sky-reflex') return;
+  if (patched.has(material)) return;
   if (!(material.isMeshStandardMaterial || material.isMeshLambertMaterial)) return;
-  material.userData.skyPatched = true;
-  material.onBeforeCompile = (shader) => {
+  patched.add(material);
+  const own = material.hasOwnProperty('onBeforeCompile') ? material.onBeforeCompile : null;
+  const ownKey = own ? material.customProgramCacheKey() : '';
+  material.onBeforeCompile = (shader, renderer) => {
+    own?.call(material, shader, renderer);
     Object.assign(shader.uniforms, skyUniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vSkyWorldY;')
@@ -45,7 +50,7 @@ uniform float uFadeStrength;`)
   outgoingLight = mix( outgoingLight, uFadeColor, skyFade );
 #include <opaque_fragment>`);
   };
-  material.customProgramCacheKey = () => 'sky-reflex';
+  material.customProgramCacheKey = () => `${ownKey}|sky-reflex`;
   material.needsUpdate = true;
 }
 

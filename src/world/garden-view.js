@@ -1,11 +1,12 @@
 // Вид грядок: плитки земли и растения по стадиям. Читает состояние из GardenState.
 // Сухие (отслужившие) — поникшие, бурые. Ночью спелые растения настораживаются, пока по огороду ходит дух, и замахиваются при ударе.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GARDEN_SIZE, CELL_SIZE, BASKET_CELL, PLANTS } from '../config.js';
 import { getMaterial, projectUV } from '../art/assets.js';
 import { cellToWorld } from '../grid.js';
 import { EMPTY, RIPE } from '../garden.js';
-import { Sprite } from '../render/sprites.js';
+import { SpriteBatch } from '../render/sprite-batch.js';
 import { getSheets } from './sheets.js';
 import { PLANT_ORDER, PLANT_FRAME } from '../art/sprite-art.js';
 
@@ -47,6 +48,13 @@ const GUIDE_COLOR = '#ffc46a';
 const TRAIL_COLOR = '#8fb8ff';
 const TRAIL_SECONDS = 150;
 
+// Склеить плитки земли в одну форму. Разметка текстуры у плиток уже своя (varyTopUV) — помечаем, чтобы её не перезаписали
+function soilGeometry(tiles) {
+  const geometry = tiles.length ? mergeGeometries(tiles) : new THREE.BufferGeometry();
+  geometry.userData.uvProjected = true;
+  return geometry;
+}
+
 // У каждой грядки свой кусок текстуры (сдвиг и разворот на 180°), чтобы рисунок земли не повторялся клетка в клетку.
 // Борозды остаются в одну сторону
 function varyTopUV(geometry) {
@@ -75,24 +83,35 @@ export class GardenView {
     // Блестит она от фонарей — тёплыми бликами
     this.soil.wet.envMapIntensity = WET_SKY_REFLECTION;
     this.cells = [];
+    // растения всех грядок — одной пачкой спрайтов (одна отрисовка вместо 80; см. render/sprite-batch.js)
+    this.plants = new SpriteBatch(getSheets().plants, GARDEN_SIZE * GARDEN_SIZE - 1);
+    scene.add(this.plants.mesh);
     for (let x = 0; x < GARDEN_SIZE; x++) {
       for (let z = 0; z < GARDEN_SIZE; z++) {
         if (x === BASKET_CELL.x && z === BASKET_CELL.z) continue; // в центре — большая корзина, не грядка
         const p = cellToWorld(x, z);
-        const tileGeo = varyTopUV(projectUV(new THREE.BoxGeometry(CELL_SIZE * 0.92, 0.04, CELL_SIZE * 0.92), this.soil.dry.userData.units));
-        const tile = new THREE.Mesh(tileGeo, this.soil.dry);
-        tile.position.set(p.x, 0.02, p.z);
-        tile.receiveShadow = true;
-        scene.add(tile);
+        // плитка земли: своя геометрия (свой кусок текстуры), уже на своём месте — в сцену попадёт склеенной (см. soilKind)
+        const tile = varyTopUV(projectUV(new THREE.BoxGeometry(CELL_SIZE * 0.92, 0.04, CELL_SIZE * 0.92), this.soil.dry.userData.units))
+          .translate(p.x, 0.02, p.z);
 
-        const plant = new Sprite(getSheets().plants); // растение — пиксельный спрайт
+        const plant = this.plants.items[this.cells.length]; // растение — пиксельный спрайт из пачки
         plant.object.position.set(p.x, 0.04, p.z);
         plant.object.visible = false;
-        scene.add(plant.object);
 
-        this.cells.push({ x, z, tile, plant, shownStage: null, shownType: null, strike: 0, lean: 0, phase: Math.random() * 2 });
+        this.cells.push({ x, z, tile, soilKind: null, plant, shownStage: null, shownType: null, strike: 0, lean: 0, phase: Math.random() * 2 });
       }
     }
+
+    // Земля всех грядок — три склеенных куска: сухая, мокрая и спелая (вместо 80 отдельных плиток — 3 отрисовки).
+    // Грядка сменила вид — кусок пересобирается (это редко: полили, созрело, собрали, высохло)
+    this.soilMeshes = Object.fromEntries(Object.entries(this.soil).map(([kind, material]) => {
+      const mesh = new THREE.Mesh(soilGeometry([]), material);
+      mesh.receiveShadow = true;
+      mesh.visible = false;
+      scene.add(mesh);
+      return [kind, mesh];
+    }));
+    this.soilDirty = true;
 
     // Подсказки светом: грядка, куда стоит пойти (в начале новой игры), и большая корзина, когда корзинка полна
     this.guide = glowSpot(CELL_SIZE * 1.3);
@@ -217,10 +236,26 @@ export class GardenView {
       }
 
       // Земля: тёмная, пока мокрая (полили или намочил дождь); светлая, когда урожай готов
-      let soil = this.soil.dry;
-      if (stage === RIPE) soil = this.soil.ripe;
-      else if (this.garden.isWet(view, now)) soil = this.soil.wet;
-      view.tile.material = soil;
+      let soil = 'dry';
+      if (stage === RIPE) soil = 'ripe';
+      else if (this.garden.isWet(view, now)) soil = 'wet';
+      if (soil !== view.soilKind) {
+        view.soilKind = soil;
+        this.soilDirty = true;
+      }
+    }
+    if (this.soilDirty) this.rebuildSoil();
+    this.plants.update();
+  }
+
+  // Пересобрать склеенные куски земли по тому, какая сейчас каждая грядка
+  rebuildSoil() {
+    this.soilDirty = false;
+    for (const [kind, mesh] of Object.entries(this.soilMeshes)) {
+      const tiles = this.cells.filter((v) => v.soilKind === kind).map((v) => v.tile);
+      mesh.geometry.dispose();
+      mesh.geometry = soilGeometry(tiles);
+      mesh.visible = tiles.length > 0;
     }
   }
 }

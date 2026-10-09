@@ -623,6 +623,7 @@ function frame(now) {
   placeOn(hoverFrame, input.hoverCell);
   placeOn(frontMarker, actionCell());
 
+  lighting.shadowTick(frameCount);
   pipeline.render(dt);
   stats?.end(realDt);
   warmUpTick();

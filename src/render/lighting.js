@@ -2,6 +2,8 @@
 // Цвета и направление меняет смена дня и ночи (render/day-night.js); здесь — сами источники
 // и помощники для неба: градиент, средний цвет, тёплый ореол, окружение для отражений.
 import * as THREE from 'three';
+
+const SUN_SHADOW_EVERY = 2; // тень солнца обновляется раз во столько кадров
 import { LIGHTING } from '../config.js';
 import { skyUniforms } from './sky-reflex.js';
 
@@ -87,6 +89,9 @@ export function environmentMap(renderer, canvas, groundColor) {
 export function createLighting(renderer, scene, quality, islandBounds) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // мягкие края теней
+  // Тени считаем сами, раз за кадр (shadowTick): иначе они пересчитываются при каждом проходе отрисовки,
+  // а сцена за кадр рисуется не один раз (для затенения в углах — ещё раз)
+  renderer.shadowMap.autoUpdate = false;
 
   // Рассеянный свет: сверху — небо, снизу — тёплый отсвет земли (цвет и силу задаёт смена дня и ночи)
   const hemi = new THREE.HemisphereLight('#ffffff', LIGHTING.groundColor, 1);
@@ -100,6 +105,7 @@ export function createLighting(renderer, scene, quality, islandBounds) {
   const reach = Math.hypot(islandBounds.maxX - islandBounds.minX, islandBounds.maxZ - islandBounds.minZ) / 2 + 0.5;
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
+  sun.shadow.autoUpdate = false; // солнце движется медленно — его тень обновляем через кадр (shadowTick)
   sun.shadow.bias = -0.0005;
   sun.shadow.intensity = LIGHTING.shadowStrength; // длинные закатные тени — полупрозрачные
   sun.shadow.normalBias = 0.03;
@@ -113,6 +119,11 @@ export function createLighting(renderer, scene, quality, islandBounds) {
   return {
     sun,
     hemi,
+    // Раз за кадр, перед отрисовкой: тени фонарей — когда фонарь попросил (lanterns.js), тень солнца — через кадр
+    shadowTick(frame) {
+      renderer.shadowMap.needsUpdate = true;
+      sun.shadow.needsUpdate = frame % SUN_SHADOW_EVERY === 0;
+    },
     // Откуда светит: azimuth — сторона (градусы), elevation — высота над горизонтом
     setSunDirection(azimuth, elevation) {
       const az = THREE.MathUtils.degToRad(azimuth);
