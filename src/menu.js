@@ -221,6 +221,21 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     setScreen(null);
   }
 
+  // ---------- Геймпад ----------
+  // Выбранный пункт помечен классом pad-focus (ui.css); после перерисовки окна выбор сбрасывается сам
+  const padItems = () => [...card.querySelectorAll('button, input[type="range"]')]
+    .filter((e) => !e.hidden && !e.disabled && e.offsetParent !== null);
+  function padMove(step) {
+    const items = padItems();
+    if (!items.length) return;
+    const current = card.querySelector('.pad-focus');
+    const i = items.indexOf(current);
+    const next = i < 0 ? (step > 0 ? 0 : items.length - 1) : (i + step + items.length) % items.length;
+    current?.classList.remove('pad-focus');
+    items[next].classList.add('pad-focus');
+    items[next].scrollIntoView({ block: 'nearest' });
+  }
+
   return {
     // Мир загрузился и готов: кнопки стартового экрана оживают
     setReady() {
@@ -241,6 +256,23 @@ export function createMenu({ engine, hasSave, savedAt, snapshot, onNewGame, onLo
     toggle() {
       if (screen === 'menu') close();
       else if (!screen) render('menu');
+    },
+    // Геймпад: up / down — выбрать пункт, left / right — громкость на ползунке (иначе тоже выбор), ok — нажать
+    padNav(cmd) {
+      if (!screen) return;
+      if (screen === 'discovery') { if (cmd === 'ok') close(); return; } // окно нового растения — любым «ок»
+      const current = card.querySelector('.pad-focus');
+      if (cmd === 'ok') {
+        if (current?.tagName === 'BUTTON') current.click();
+        else if (!current) padMove(1);
+        return;
+      }
+      if (current?.type === 'range' && (cmd === 'left' || cmd === 'right')) {
+        current.value = Number(current.value) + (cmd === 'right' ? 1 : -1) * Number(current.step);
+        current.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+      padMove(cmd === 'up' || cmd === 'left' ? -1 : 1);
     },
   };
 }

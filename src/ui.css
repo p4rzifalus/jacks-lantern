@@ -309,6 +309,9 @@ body.intro .toolbar, body.intro .seed-row, body.intro .hud, body.intro .corner-b
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .menu-buttons button:hover:not(:disabled), .menu-sound .toggle:hover { background: rgba(143, 174, 90, 0.22); }
+/* пункт, выбранный геймпадом: подсветка как при наведении и чернильная рамка вокруг */
+.menu .pad-focus { outline: 3px solid var(--ink); outline-offset: 3px; }
+.menu-buttons button.pad-focus:not(.primary), .menu-sound .toggle.pad-focus { background: rgba(143, 174, 90, 0.22); }
 .menu-buttons button small { display: block; font-size: 13px; font-weight: 400; opacity: 0.8; margin-top: 2px; }
 .menu-buttons button.link { min-height: 0; padding: 0 0 4px; background: none; border: none; box-shadow: none; font-size: 14px; font-weight: 400; color: var(--ink-dim); text-decoration: underline; }
 .menu-buttons button[hidden] { display: none; }

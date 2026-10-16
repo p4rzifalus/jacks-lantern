@@ -1,4 +1,4 @@
-// Управление: клавиатура (ходьба, действие, инструменты) и мышь/тап (клик по клетке).
+// Управление: клавиатура (ходьба, действие, инструменты) и мышь/тап (клик по клетке). Геймпад опрашивает gamepad.js.
 import * as THREE from 'three';
 import { worldToCell, isInGarden } from './grid.js';
 
@@ -65,6 +65,8 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
   const input = {
     hoverCell: null,
     enabled: true, // false — управление выключено (открыто меню)
+    padDir: { x: 0, y: 0 }, // направление с геймпада на экране (x — вправо, y — вверх); его задаёт main.js каждый кадр
+    action() { if (input.enabled) handlers.onAction?.(); }, // кнопка действия геймпада — как пробел
 
     // Направление ходьбы с клавиатуры (нулевой вектор, если ничего не нажато)
     getMoveDir() {
@@ -80,6 +82,7 @@ export function createInput(canvas, camera, handlers = {}, pickables = []) {
       if (pressed.has('down')) dir.sub(screenUp);
       if (pressed.has('right')) dir.add(screenRight);
       if (pressed.has('left')) dir.sub(screenRight);
+      dir.addScaledVector(screenRight, input.padDir.x).addScaledVector(screenUp, input.padDir.y); // стик и крестовина
       return dir;
     },
   };

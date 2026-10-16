@@ -7,6 +7,7 @@ import { createScene, createHoverFrame, createFrontMarker } from './scene.js';
 import { Hero } from './hero.js';
 import { GardenView } from './world/garden-view.js';
 import { createInput } from './input.js';
+import { createGamepad } from './gamepad.js';
 import { createUI, TOOLS } from './ui.js';
 import { initUIArt } from './ui-art.js';
 import { createPopups } from './popups.js';
@@ -510,14 +511,17 @@ else if (playStory && !saved) {
   intro.prepare();
 } else if (!skipIntro) menu.showStart();
 
+// Esc (и Start на геймпаде): закрыть то, что открыто, а если ничего — открыть меню
+function escape() {
+  if (menu.isOpen) menu.close();
+  else if (game.state.shopOpen) toggleShop(false);
+  else if (game.state.herbariumOpen) toggleHerbarium(false);
+  else menu.open();
+}
+
 window.addEventListener('keydown', (e) => {
   if (intro.active) return; // во вступлении клавиши — его (пробел — дальше, Esc — пропустить)
-  if (e.code === 'Escape') {
-    if (menu.isOpen) menu.close();
-    else if (game.state.shopOpen) toggleShop(false);
-    else if (game.state.herbariumOpen) toggleHerbarium(false);
-    else menu.open();
-  }
+  if (e.code === 'Escape') escape();
   if (menu.isOpen || e.repeat) return; // в меню клавиши игры не работают; зажатая клавиша срабатывает один раз
   if (e.code === 'KeyM') sound.engine.toggle('music');   // M — музыка
   if (e.code === 'KeyN') sound.engine.toggle('effects'); // N — звуки
@@ -525,6 +529,36 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH') toggleHerbarium();               // H — гербарий
   if (e.code === 'KeyQ') rotateWorld(-1);                 // Q / E — повернуть мир
   if (e.code === 'KeyE') rotateWorld(1);
+});
+
+// Геймпад — те же действия, что и на клавиатуре. В меню: стик / крестовина — выбрать пункт, A — нажать,
+// B и Start — закрыть (стартовый экран закрывается только кнопками)
+function stepTool(step) {
+  const i = TOOLS.findIndex((t) => t.id === game.state.tool);
+  selectTool(TOOLS[(i + step + TOOLS.length) % TOOLS.length].id);
+}
+const gamepad = createGamepad((name) => {
+  if (intro.active) return;
+  if (name === 'menu') return escape();
+  if (menu.isOpen) {
+    if (['up', 'down', 'left', 'right'].includes(name)) menu.padNav(name);
+    if (name === 'action') menu.padNav('ok');
+    if (name === 'back') menu.close();
+    return;
+  }
+  if (name === 'back') {
+    if (game.state.shopOpen) toggleShop(false);
+    else if (game.state.herbariumOpen) toggleHerbarium(false);
+    return;
+  }
+  if (name === 'action') input.action();
+  if (name === 'prevTool' && input.enabled) stepTool(-1);
+  if (name === 'nextTool' && input.enabled) stepTool(1);
+  if (name === 'shop') toggleShop();
+  if (name === 'herbarium') toggleHerbarium();
+  if (name === 'rotateLeft') rotateWorld(-1);
+  if (name === 'rotateRight') rotateWorld(1);
+  if (name === 'closeUp') toggleCloseUp();
 });
 
 // ---------- Подсказки светом ----------
@@ -707,6 +741,7 @@ function frame(now) {
   last = now;
   stats?.begin();
 
+  input.padDir = gamepad.poll();
   hero.update(dt, input.getMoveDir(), world);
   cameraControl.update(dt, now / 1000, hero.position);
   // ночью, пока по огороду ходит дух, спелые растения настороже и тянутся к ближайшему
